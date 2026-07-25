@@ -1,0 +1,13 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>PasteDispenser</title><link rel="stylesheet" href="style.css"></head><body>
+<main><h1>PasteDispenser</h1><p id="status">Machine déconnectée</p>
+<button id="connect">Connecter la machine</button>
+<section><h2>Wi-Fi</h2><label>SSID<input id="ssid" autocomplete="username"></label>
+<label>Mot de passe<input id="password" type="password" autocomplete="current-password"></label>
+<button id="wifi">Se connecter au Wi-Fi</button><p id="wifiStatus"></p></section>
+<section><h2>Commande manuelle</h2><div class="row">
+<button id="push">Pousser</button><button id="pull">Tirer</button><button id="stop">Arrêter</button></div></section>
+<section><h2>Dosage</h2><label>Distance (mm)<input id="distance" type="number" value="0.8" step="0.05"></label>
+<label>Recul (mm)<input id="retract" type="number" value="0.1" step="0.05"></label>
+<label>Vitesse (mm/s)<input id="speed" type="number" value="5" step="0.5"></label><button id="dose">Doser</button></section>
+<pre id="telemetry"></pre></main><script src="app.js"></script></body></html>

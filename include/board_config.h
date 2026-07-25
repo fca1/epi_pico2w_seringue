@@ -1,0 +1,18 @@
+#pragma once
+#define PIN_TMC_SPI_SCK 18
+#define PIN_TMC_SPI_TX 19
+#define PIN_TMC_SPI_RX 16
+#define PIN_TMC_SPI_CS 17
+#define PIN_TMC_ENABLE 20
+#define PIN_SW_PUSH 14
+#define PIN_SW_PULL 15
+#define TMC_SPI_PORT spi0
+#define TMC_SPI_BAUD_HZ 1000000u
+#define BUTTON_DEBOUNCE_MS 30u
+#define CONTROL_PERIOD_MS 5u
+#define STATUS_PERIOD_MS 250u
+#define MANUAL_TIMEOUT_MS 30000u
+#define POSITION_MIN_MM 0.0f
+#define POSITION_MAX_MM 120.0f
+#define MAX_SPEED_MM_S 25.0f
+#define MAX_ACCEL_MM_S2 300.0f

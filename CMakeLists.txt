@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.13)
+include(pico_sdk_import.cmake)
+project(pico2_seringue C CXX ASM)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+pico_sdk_init()
+
+add_executable(paste_dispenser src/main.c src/app_state.c src/buttons.c src/motor_control.c
+  src/tmc5130.c src/config_store.c src/safety.c src/command_api.c src/ble_service.c src/wifi_manager.c)
+target_include_directories(paste_dispenser PRIVATE include)
+target_link_libraries(paste_dispenser pico_stdlib hardware_spi hardware_flash pico_flash
+  pico_btstack_ble pico_btstack_cyw43 pico_cyw43_arch_lwip_threadsafe_background pico_multicore)
+pico_btstack_make_gatt_header(paste_dispenser PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/paste_dispenser.gatt)
+pico_enable_stdio_usb(paste_dispenser 1)
+pico_enable_stdio_uart(paste_dispenser 0)
+pico_add_extra_outputs(paste_dispenser)
+
+option(BUILD_HOST_TESTS "Build host unit tests" OFF)
+if(BUILD_HOST_TESTS)
+  enable_testing()
+  add_executable(unit_tests tests/test_main.c src/app_state.c src/motor_control.c)
+  target_compile_definitions(unit_tests PRIVATE UNIT_TEST=1)
+  target_include_directories(unit_tests PRIVATE include)
+  add_test(NAME unit_tests COMMAND unit_tests)
+endif()
