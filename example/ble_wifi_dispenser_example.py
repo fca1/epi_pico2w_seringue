@@ -9,8 +9,8 @@ Run:     python example/ble_wifi_dispenser_example.py
 """
 import argparse
 import asyncio
-import http.client
 import json
+import socket
 import time
 
 from bleak import BleakClient, BleakScanner
@@ -83,24 +83,30 @@ async def provision_wifi(device, ssid: str, password: str, timeout: float) -> st
 
 def post_command(ip: str, command: dict) -> dict:
     body = json.dumps(command, separators=(",", ":")).encode("utf-8")
-    connection = http.client.HTTPConnection(ip, 80, timeout=5)
-    try:
-        connection.request(
-            "POST",
-            "/api/command",
-            body=body,
-            headers={"Content-Type": "application/json", "Content-Length": str(len(body))},
-        )
-        response = connection.getresponse()
-        payload = response.read().decode("utf-8", errors="replace")
-        if response.status != 200:
-            raise RuntimeError(f"HTTP {response.status}: {payload}")
-        result = json.loads(payload)
-        if not result.get("ok"):
-            raise RuntimeError(f"Command rejected: {command}")
-        return result
-    finally:
-        connection.close()
+    request = (
+        f"POST /api/command HTTP/1.1\r\n"
+        f"Host: {ip}\r\n"
+        "Content-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\n"
+        "Connection: close\r\n\r\n"
+    ).encode("ascii") + body
+    with socket.create_connection((ip, 80), timeout=5) as connection:
+        # The embedded HTTP endpoint currently expects headers and body in the
+        # same receive buffer, so deliberately transmit one compact request.
+        connection.sendall(request)
+        response = bytearray()
+        while chunk := connection.recv(1024):
+            response.extend(chunk)
+    head, separator, payload = bytes(response).partition(b"\r\n\r\n")
+    if not separator:
+        raise RuntimeError("Malformed HTTP response")
+    status_line = head.split(b"\r\n", 1)[0].decode("ascii", errors="replace")
+    if " 200 " not in status_line:
+        raise RuntimeError(f"{status_line}: {payload.decode(errors='replace')}")
+    result = json.loads(payload.decode("utf-8"))
+    if not result.get("ok"):
+        raise RuntimeError(f"Command rejected: {command}")
+    return result
 
 
 async def wait_for_http(ip: str, timeout: float = 15) -> None:
@@ -153,4 +159,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
