@@ -394,6 +394,20 @@ Une autre course peut être demandée avec `--distance`, par exemple
 défaut matériel : il affiche la télémétrie reçue et signale si l’action reste refusée parce
 que `state` vaut `FAULT`.
 
+Le second exemple `example/ble_wifi_dispenser_example.py` illustre le changement de
+transport complet : il configure par BLE le SSID `EPI` et son mot de passe d’exemple,
+attend l’adresse IPv4, ferme volontairement BLE, puis envoie les paramètres et l’ordre de
+dosage par `POST /api/command` sur le Wi-Fi :
+
+```powershell
+python example/ble_wifi_dispenser_example.py
+```
+
+Les options `--ssid`, `--password` et `--distance` permettent de remplacer les valeurs de
+démonstration. Le mot de passe n’est jamais écrit dans les traces du programme. La fenêtre
+de provisionnement doit être ouverte : premier démarrage, compilation avec auto-connexion
+désactivée, ou maintien de PULL pendant le démarrage.
+
 ## Référence des primitives de communication
 
 Chaque primitive ci-dessous correspond à une opération complète disponible pour un client.

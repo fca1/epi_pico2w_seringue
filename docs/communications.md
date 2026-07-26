@@ -334,6 +334,9 @@ Le Wi-Fi doit d’abord être configuré par BLE. Après connexion, la Pico expo
 Pour WebSocket, envoyer directement l’objet JSON sous forme de trame texte. Pour HTTP,
 placer le même objet dans le corps de la requête POST avec `Content-Type: application/json`.
 
+L’exemple complet `example/ble_wifi_dispenser_example.py` provisionne `EPI` par BLE,
+ferme BLE, puis applique une configuration et une dose par l’API HTTP Wi-Fi.
+
 ### État Wi-Fi : `GET /api/status`
 
 Exemple : `curl http://192.168.1.42/api/status`. Retour : télémétrie JSON courante.
