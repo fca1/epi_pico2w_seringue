@@ -1,4 +1,6 @@
 build/
 build-*/
 unit_tests.exe
+__pycache__/
+*.pyc
 .vscode/

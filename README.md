@@ -13,7 +13,7 @@ la Pico 2 sans radio ou pour la Pico 2 W avec BLE et Wi-Fi.
 |---|---:|---|
 | `motor` | 6 | machine d’états, boutons, TMC5130, StallGuard et sécurités, période 5 ms |
 | `communications` | 4 | collecte des commandes BLE/WebSocket sur Pico 2 W |
-| `usb-command` | 4 | réception des commandes JSON terminées par un retour à la ligne sur USB CDC |
+| `usb-command` | 4 | console ASCII et commandes JSON terminées par un retour à la ligne sur USB CDC |
 | `telemetry` | 2 | formatage et émission périodique de l’état vers USB et la radio disponible |
 | `status-led` | 1 | animation non bloquante de la LED |
 | `wifi` | 3 | scan, connexion et serveur réseau, uniquement sur Pico 2 W |
@@ -129,12 +129,68 @@ cmake --build build
 Maintenir `BOOTSEL`, brancher la Pico puis copier `build/paste_dispenser.uf2` sur le
 volume USB `RPI-RP2`. La sortie JSON de diagnostic est disponible sur USB CDC.
 
-Sur la Pico 2 sans radio, chaque objet JSON de commande décrit dans cette documentation
-peut être envoyé sur le port COM à 115200 bauds, suivi de `\n`. La carte répond
-`{"command_accepted":true}` lorsque l’ordre a été placé dans la file. La télémétrie
-contient `"radio_available":false`. Les primitives BLE, Wi-Fi, HTTP et WebSocket sont
-absentes ; toutes les fonctions locales, USB, moteur, boutons, sécurité, stockage et
-statistiques restent compilées.
+Sous Windows, le téléchargement peut être automatisé sans maintenir BOOTSEL si le firmware
+est déjà actif :
+
+```bat
+flash_firmware.bat build\paste_dispenser.uf2
+```
+
+Le script détecte le port USB de la Pico, demande le redémarrage en mode BOOTSEL à
+1 200 bauds, attend le volume `RP2350`/`RPI-RP2`, puis copie le fichier UF2.
+
+Sur Pico 2 comme sur Pico 2 W, chaque commande ASCII ou objet JSON décrit dans cette
+documentation peut être envoyé sur le port COM à 115200 bauds, suivi de `\n`. La carte
+répond `OK QUEUED`, `OK` ou `ERR ...`. Sur la Pico 2 sans radio, la télémétrie contient
+`"radio_available":false` et seules les primitives BLE, Wi-Fi, HTTP et WebSocket sont
+absentes ; les fonctions locales, USB, moteur, boutons, sécurité, stockage et statistiques
+restent compilées.
+
+## Console USB série ASCII
+
+La console USB CDC reste disponible sur la Pico 2 W en même temps que BLE et Wi-Fi. Elle
+utilise 115200 bauds, 8 bits, sans parité, 1 bit d’arrêt. Les commandes sont insensibles à
+la casse et se terminent par CR/LF ou LF.
+
+| Commande | Fonction |
+|---|---|
+| `HELP` | affiche toutes les commandes et la version logicielle |
+| `VERSION` | affiche `PasteDispenser 1.2.0` |
+| `STATUS` | retourne immédiatement l’état JSON complet |
+| `CONFIG` | affiche tous les paramètres persistants |
+| `PUSH`, `PULL`, `STOP` | mouvement manuel et arrêt prioritaire |
+| `DOSE 0.8 4 0.1` | fournit 0,8 mm à 4 mm/s puis recule de 0,1 mm |
+| `MOVE -2 3` | déplacement relatif signé en mm |
+| `UNLOAD 3` | revient au début de course à 3 mm/s ou jusqu’au blocage |
+| `ZERO` | définit la position actuelle comme zéro |
+| `FAULTRESET` | acquitte un défaut sans redémarrer |
+| `RESET` | arrête le moteur et redémarre le microcontrôleur |
+| `SGCAL START`, `SGCAL FINISH`, `SGCAL CANCEL` | calibration StallGuard |
+| `FLUSH` | remet le compteur d’activations à zéro |
+| `SET nom valeur` | valide et sauvegarde un paramètre en flash |
+
+Exemple de session :
+
+```text
+VERSION
+PasteDispenser 1.2.0
+OK
+SET dosing_speed_mm_s 4
+OK QUEUED
+SET trigger_dose_mm 0.8
+OK QUEUED
+STATUS
+{"state":"READY",...}
+OK
+DOSE 0.8 4 0.1
+OK QUEUED
+```
+
+Les noms acceptés par `SET` sont ceux de la table « Paramétrage principal », auxquels
+s’ajoutent `stallguard_threshold`, `stallguard_warning_level`,
+`stallguard_critical_level` et `stallguard_filter_count`. Une valeur invalide n’est pas
+sauvegardée. Les paramètres mécaniques (pas moteur, micro-pas, vis et courants) prennent
+complètement effet après `RESET`.
 
 ## Tests hôte
 
@@ -156,6 +212,10 @@ UTF-8. La page Web Bluetooth doit être servie en HTTPS ou depuis `localhost`.
 ### Service et caractéristiques
 
 Le service principal est `7e400001-b5a3-f393-e0a9-e50e24dcca9e`.
+
+La Pico utilise une adresse BLE statique aléatoire dérivée de son identifiant matériel.
+Elle reste donc stable pour une carte donnée, distingue plusieurs pousse-seringues et évite
+la réutilisation d’un ancien cache GATT Windows après un changement de firmware.
 
 | Fin UUID | Sens | Contenu |
 |---|---|---|
@@ -189,6 +249,8 @@ Les ordres sont écrits sur la caractéristique `0002`.
 | définir la position zéro | `{"command":"set_zero"}` | machine au repos uniquement |
 | acquitter un défaut | `{"command":"reset"}` | depuis `FAULT` uniquement |
 | régler l’entrée DOSE | `{"command":"set_trigger_dose","distance_mm":0.8}` | plage 0–100 mm, sauvegardée |
+| régler un paramètre | `{"command":"set_config","parameter":"dosing_speed_mm_s","value":4}` | même liste que la commande USB `SET` |
+| redémarrer | `{"command":"reboot"}` | arrêt du moteur puis redémarrage matériel |
 | remettre les statistiques à zéro | `{"command":"flush_statistics"}` | sauvegardé immédiatement |
 
 Une commande de mouvement concurrente est ignorée si la machine n’est pas `READY`. Le
@@ -313,6 +375,22 @@ Maintenir PUSH et PULL pendant cinq secondes efface la configuration et les stat
 
 Le mot de passe sauvegardé n’est jamais exposé par une caractéristique en lecture.
 
+### Exemple Python BLE côté hôte
+
+Le programme `example/ble_dispenser_example.py` recherche le service, se connecte au
+pousse-seringue, active les notifications d’état, transmet les valeurs d’exemple de
+`example/ble_dispenser_example.py`, puis demande une fourniture contrôlée de 0,8 mm :
+
+```powershell
+python -m pip install -r example/requirements.txt
+python example/ble_dispenser_example.py
+```
+
+Une autre course peut être demandée avec `--distance`, par exemple
+`python example/ble_dispenser_example.py --distance 1.2`. Le programme ne masque pas un
+défaut matériel : il affiche la télémétrie reçue et signale si l’action reste refusée parce
+que `state` vaut `FAULT`.
+
 ## Référence des primitives de communication
 
 Chaque primitive ci-dessous correspond à une opération complète disponible pour un client.
@@ -328,8 +406,9 @@ caractéristique `0003`.
 Écriture UTF-8 d’un objet JSON sur `0002`. Les valeurs de `command` disponibles sont
 `push_start`, `push_stop`, `pull_start`, `pull_stop`, `stop`, `dose`, `move_relative`,
 `set_zero`, `reset`, `set_trigger_dose`, `flush_statistics`, `sg_calibrate_start`,
-`sg_calibrate_finish` et `sg_calibrate_cancel`. Les paramètres numériques utilisent
-`distance_mm`, `speed_mm_s` et `retract_mm`.
+`sg_calibrate_finish`, `sg_calibrate_cancel`, `set_config` et `reboot`. Les paramètres
+numériques utilisent `distance_mm`, `speed_mm_s`, `retract_mm` et `value`; `set_config`
+utilise aussi la chaîne `parameter`.
 
 ### Primitive `BLE_MACHINE_STATUS`
 
@@ -354,8 +433,9 @@ l’opération. La primitive `STOP` reste prioritaire.
 
 ### Primitive `BLE_WIFI_SCAN_START`
 
-Écriture d’un octet quelconque sur `0009`. La demande est acceptée pendant la fenêtre de
-provisionnement et lance un scan radio asynchrone.
+Écriture d’un octet quelconque sur `0009`. Le scan, qui ne modifie aucun identifiant, reste
+disponible même après la fermeture de la fenêtre de provisionnement et s’exécute de façon
+asynchrone.
 
 ### Primitive `BLE_WIFI_SCAN_RESULTS`
 

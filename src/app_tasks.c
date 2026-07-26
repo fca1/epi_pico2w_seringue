@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include "pico/stdlib.h"
 #include "hardware/gpio.h"
 #include "hardware/watchdog.h"
@@ -12,6 +13,7 @@
 #include "buttons.h"
 #include "command_api.h"
 #include "config_store.h"
+#include "firmware_version.h"
 #include "motor_control.h"
 #include "safety.h"
 #include "stallguard_calibration.h"
@@ -63,13 +65,27 @@ static void set_fault(safety_fault_t f){motor_stop();machine.fault_code=f;app_st
 static bool begin_manual(int d,uint32_t now){if(machine.state!=APP_READY||!motor_manual(d))return false;direction=d;safety_manual_started(&safety,now);app_state_dispatch(&machine,d>0?EVT_PUSH:EVT_PULL);if(d>0)statistics_increment();return true;}
 static void stop_motion(void){if(machine.state==APP_HOMING)unload_result="stopped";motor_stop();direction=0;if(machine.state!=APP_FAULT)app_state_dispatch(&machine,EVT_STOP);}
 
+static bool apply_config_value(config_param_t parameter,float value){device_config_t next=config;
+ switch(parameter){
+ case CFG_SCREW_PITCH_MM:next.screw_pitch_mm=value;break;case CFG_MOTOR_STEPS_PER_REV:next.motor_steps_per_rev=(uint16_t)value;break;case CFG_MICROSTEPS:next.microsteps=(uint16_t)value;break;
+ case CFG_RUN_CURRENT_MA:next.motor_run_current_mA=(uint16_t)value;break;case CFG_HOLD_CURRENT_MA:next.motor_hold_current_mA=(uint16_t)value;break;
+ case CFG_MANUAL_SPEED_MM_S:next.manual_speed_mm_s=value;break;case CFG_DOSING_SPEED_MM_S:next.dosing_speed_mm_s=value;break;case CFG_TRIGGER_DOSE_MM:next.trigger_dose_mm=value;break;
+ case CFG_ACCELERATION_MM_S2:next.acceleration_mm_s2=value;break;case CFG_RETRACT_DISTANCE_MM:next.retract_distance_mm=value;break;case CFG_RETRACT_SPEED_MM_S:next.retract_speed_mm_s=value;break;
+ case CFG_RETRACT_DELAY_MS:next.retract_delay_ms=(uint32_t)value;break;case CFG_POSITION_MIN_MM:next.position_min_mm=value;break;case CFG_POSITION_MAX_MM:next.position_max_mm=value;break;
+ case CFG_MANUAL_TIMEOUT_MS:next.manual_timeout_ms=(uint32_t)value;break;case CFG_STALLGUARD_THRESHOLD:next.stallguard_threshold=(int8_t)value;break;
+ case CFG_STALLGUARD_WARNING:next.stallguard_warning_level=(uint16_t)value;break;case CFG_STALLGUARD_CRITICAL:next.stallguard_critical_level=(uint16_t)value;break;
+ case CFG_STALLGUARD_FILTER_COUNT:next.stallguard_filter_count=(uint16_t)value;break;case CFG_STALLGUARD_ENABLED:next.stallguard_enabled=value!=0;break;default:return false;}
+ if(!device_config_validate(&next)||!config_store_save(&next))return false;config=next;return true;}
+
 static void execute(machine_command_t *c,uint32_t now){
  if(c->kind==CMD_STOP||c->kind==CMD_PUSH_STOP||c->kind==CMD_PULL_STOP){stop_motion();return;}
+ if(c->kind==CMD_REBOOT){motor_stop();watchdog_reboot(0,0,10);return;}
  if(c->kind==CMD_RESET&&machine.state==APP_FAULT){safety_init(&safety);app_state_dispatch(&machine,EVT_RESET);return;}
  if(c->kind==CMD_SG_CAL_CANCEL){sg_cal.active=false;motor_configure_stallguard(config.stallguard_enabled,config.stallguard_threshold);return;}
  if(c->kind==CMD_SG_CAL_START&&machine.state==APP_READY){sg_calibration_start(&sg_cal);motor_configure_stallguard(true,config.stallguard_threshold);return;}
  if(c->kind==CMD_SG_CAL_FINISH&&machine.state==APP_READY){uint16_t baseline,warning,critical;if(sg_calibration_finish(&sg_cal,&baseline,&warning,&critical)){config.stallguard_baseline=baseline;config.stallguard_warning_level=warning;config.stallguard_critical_level=critical;config.stallguard_calibration_speed_mm_s=config.manual_speed_mm_s;config.stallguard_enabled=1;config_store_save(&config);motor_configure_stallguard(true,config.stallguard_threshold);}return;}
- if(c->kind==CMD_SET_TRIGGER_DOSE&&machine.state==APP_READY){if(c->distance_mm>0&&c->distance_mm<=100){config.trigger_dose_mm=c->distance_mm;config_store_save(&config);}return;}
+ if(c->kind==CMD_SET_TRIGGER_DOSE){if(c->distance_mm>0&&c->distance_mm<=100){config.trigger_dose_mm=c->distance_mm;config_store_save(&config);}return;}
+ if(c->kind==CMD_SET_CONFIG){apply_config_value(c->parameter,c->value);return;}
  if(c->kind==CMD_FLUSH_STATISTICS&&machine.state==APP_READY){statistics_flush();statistics_persist();return;}
  if(machine.state!=APP_READY)return;
  switch(c->kind){
@@ -94,11 +110,11 @@ static void update_telemetry(void){
 static void motor_task(void *arg){
  (void)arg;button_state_t old={0};uint32_t conflict_since=0,last_status=0;TickType_t wake=xTaskGetTickCount();
  for(;;){uint32_t now=to_ms_since_boot(get_absolute_time());button_state_t b=buttons_update(now);machine_command_t command;
+  while(xQueueReceive(command_queue,&command,0)==pdTRUE)execute(&command,now);
   if(b.conflict){if(!conflict_since)conflict_since=now;set_fault(SAFETY_BUTTON_CONFLICT);if(now-conflict_since>=5000){motor_stop();config_store_factory_reset();statistics_factory_reset();watchdog_reboot(0,0,0);}}
   else{conflict_since=0;if(machine.state!=APP_FAULT){
    if(b.push&&!old.push)begin_manual(1,now);else if(b.pull&&!old.pull)begin_manual(-1,now);else if(b.dose&&!old.dose){machine_command_t trigger={.kind=CMD_DOSE,.distance_mm=config.trigger_dose_mm,.speed_mm_s=config.dosing_speed_mm_s,.retract_mm=config.retract_distance_mm};execute(&trigger,now);}
    else if(!b.push&&!b.pull&&(machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL))stop_motion();
-   while(xQueueReceive(command_queue,&command,0)==pdTRUE)execute(&command,now);
    if(machine.state==APP_STOPPING&&motor_is_stopped())app_state_dispatch(&machine,EVT_STOPPED);
    if(machine.state==APP_DOSING&&motor_target_reached()){direction=0;if(retract_mm>0){app_state_dispatch(&machine,EVT_MOVE_DONE);phase_ms=now;}else{app_state_dispatch(&machine,EVT_MOVE_DONE);app_state_dispatch(&machine,EVT_MOVE_DONE);}}
    if(machine.state==APP_RETRACTING&&direction==0&&now-phase_ms>=config.retract_delay_ms){if(motor_move_relative(-retract_mm,config.retract_speed_mm_s))direction=-1;else set_fault(SAFETY_SPI);}
@@ -152,9 +168,30 @@ static void telemetry_task(void *arg){
  }
 }
 
+static void print_help(void){
+ puts("PasteDispenser " DISPENSER_FIRMWARE_VERSION);
+ puts("HELP | VERSION | STATUS | CONFIG");
+ puts("PUSH | PULL | STOP | DOSE <mm> [mm/s] [retract_mm]");
+ puts("MOVE <mm> [mm/s] | UNLOAD [mm/s] | ZERO | FAULTRESET | RESET");
+ puts("SET <parameter> <value> | SGCAL START|FINISH|CANCEL | FLUSH");
+ puts("Parameters: screw_pitch_mm motor_steps_per_rev microsteps motor_run_current_mA motor_hold_current_mA");
+ puts(" manual_speed_mm_s dosing_speed_mm_s trigger_dose_mm acceleration_mm_s2 retract_distance_mm retract_speed_mm_s");
+ puts(" retract_delay_ms position_min_mm position_max_mm manual_timeout_ms stallguard_threshold stallguard_warning_level");
+ puts(" stallguard_critical_level stallguard_filter_count stallguard_enabled");
+ puts("RESET reboots the controller; settings are saved in flash. Mechanical settings take full effect after RESET.");
+}
+static void print_config(void){printf("CONFIG version=%lu screw_pitch_mm=%.3f motor_steps_per_rev=%u microsteps=%u motor_run_current_mA=%u motor_hold_current_mA=%u manual_speed_mm_s=%.3f dosing_speed_mm_s=%.3f trigger_dose_mm=%.3f acceleration_mm_s2=%.3f retract_distance_mm=%.3f retract_speed_mm_s=%.3f retract_delay_ms=%lu position_min_mm=%.3f position_max_mm=%.3f manual_timeout_ms=%lu stallguard_threshold=%d stallguard_warning_level=%u stallguard_critical_level=%u stallguard_filter_count=%u stallguard_enabled=%u\n",
+ (unsigned long)config.version,config.screw_pitch_mm,config.motor_steps_per_rev,config.microsteps,config.motor_run_current_mA,config.motor_hold_current_mA,config.manual_speed_mm_s,config.dosing_speed_mm_s,config.trigger_dose_mm,config.acceleration_mm_s2,config.retract_distance_mm,config.retract_speed_mm_s,(unsigned long)config.retract_delay_ms,config.position_min_mm,config.position_max_mm,(unsigned long)config.manual_timeout_ms,config.stallguard_threshold,config.stallguard_warning_level,config.stallguard_critical_level,config.stallguard_filter_count,config.stallguard_enabled);}
+
 static void usb_command_task(void *arg){
  (void)arg;char line[512];size_t used=0;
- for(;;){int ch=getchar_timeout_us(0);if(ch==PICO_ERROR_TIMEOUT){vTaskDelay(pdMS_TO_TICKS(5));continue;}if(ch=='\r')continue;if(ch=='\n'){machine_command_t command;if(used&&command_parse_json(line,used,&command)&&submit_command(&command))puts("{\"command_accepted\":true}");else if(used)puts("{\"command_accepted\":false}");used=0;}else if(used<sizeof(line)-1)line[used++]=(char)ch;else used=0;}
+ for(;;){int ch=getchar_timeout_us(0);if(ch==PICO_ERROR_TIMEOUT){vTaskDelay(pdMS_TO_TICKS(5));continue;}if(ch=='\r')continue;if(ch=='\n'){if(used){line[used]=0;
+    if(!strcasecmp(line,"HELP")){print_help();puts("OK");}
+    else if(!strcasecmp(line,"VERSION")){puts(DISPENSER_FIRMWARE_NAME " " DISPENSER_FIRMWARE_VERSION);puts("OK");}
+    else if(!strcasecmp(line,"STATUS")){char json[TELEMETRY_SIZE];telemetry_snapshot_t s;taskENTER_CRITICAL();s=telemetry_snapshot;taskEXIT_CRITICAL();format_telemetry(json,sizeof(json),&s);puts(json);puts("OK");}
+    else if(!strcasecmp(line,"CONFIG")){print_config();puts("OK");}
+    else{machine_command_t command;bool parsed=line[0]=='{'?command_parse_json(line,used,&command):command_parse_ascii(line,used,&command);if(parsed&&submit_command(&command))puts("OK QUEUED");else puts("ERR SYNTAX_OR_QUEUE");}}
+   used=0;}else if(used<sizeof(line)-1)line[used++]=(char)ch;else{used=0;puts("ERR LINE_TOO_LONG");}}
 }
 
 static void led_task(void *arg){(void)arg;TickType_t wake=xTaskGetTickCount();for(;;){status_led_update(to_ms_since_boot(get_absolute_time()),radio_connected,motor_moving);vTaskDelayUntil(&wake,pdMS_TO_TICKS(25));}}
