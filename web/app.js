@@ -9,14 +9,22 @@ const enc=new TextEncoder(),dec=new TextDecoder();
 async function send(value){if(!command)throw Error('Machine non connectée');await command.writeValue(enc.encode(JSON.stringify(value)));}
 async function stop(){manual=false;try{await send({command:'stop'});}catch(e){show(e.message);}}
 function show(s){document.querySelector('#status').textContent=s;}
-document.querySelector('#connect').onclick=async()=>{
- try{device=await navigator.bluetooth.requestDevice({filters:[{namePrefix:'PasteDispenser-',services:[SERVICE]}]});
+async function connectDevice(selectedDevice){
+ device=selectedDevice;
  device.addEventListener('gattserverdisconnected',()=>{show('Connexion perdue — arrêt local attendu');manual=false;});
  const server=await device.gatt.connect(),service=await server.getPrimaryService(SERVICE);
  command=await service.getCharacteristic(COMMAND);statusChar=await service.getCharacteristic(STATUS);
  await statusChar.startNotifications();statusChar.oncharacteristicvaluechanged=e=>document.querySelector('#telemetry').textContent=dec.decode(e.target.value);
- show('Connectée');}catch(e){show(e.message);}
+ show('Connectée');
+}
+document.querySelector('#connect').onclick=async()=>{
+ try{await connectDevice(await navigator.bluetooth.requestDevice({filters:[{namePrefix:'PasteDispenser-',services:[SERVICE]}]}));}
+ catch(e){show(e.message);}
 };
+if(navigator.bluetooth.getDevices)navigator.bluetooth.getDevices().then(devices=>{
+ const remembered=devices.find(d=>d.name?.startsWith('PasteDispenser-'));
+ if(remembered)connectDevice(remembered).catch(()=>show('Machine mémorisée — cliquez sur Connecter'));
+});
 function hold(id,cmd,release){const b=document.querySelector(id);b.onpointerdown=async e=>{e.preventDefault();b.setPointerCapture(e.pointerId);manual=true;await send({command:cmd});};
  ['pointerup','pointercancel','lostpointercapture'].forEach(x=>b.addEventListener(x,()=>{if(manual)send({command:release}).finally(()=>manual=false);}));}
 hold('#push','push_start','push_stop');hold('#pull','pull_start','pull_stop');
@@ -29,5 +37,6 @@ document.querySelector('#wifi').onclick=async()=>{try{const service=await device
  setTimeout(async()=>{const s=dec.decode(await (await service.getCharacteristic(WIFI_STATUS)).readValue());const ip=dec.decode(await (await service.getCharacteristic(IP)).readValue());wifiStatus.innerHTML=s+(ip?` — <a href="http://${ip}">http://${ip}</a>`:'');},22000);
  }catch(e){wifiStatus.textContent=e.message;}};
 document.querySelector('#dose').onclick=()=>send({command:'dose',distance_mm:+distance.value,retract_mm:+retract.value,speed_mm_s:+speed.value}).catch(e=>show(e.message));
+saveTriggerDose.onclick=()=>send({command:'set_trigger_dose',distance_mm:+triggerDose.value}).catch(e=>show(e.message));
 sgStart.onclick=()=>send({command:'sg_calibrate_start'});sgFinish.onclick=()=>send({command:'sg_calibrate_finish'});sgCancel.onclick=()=>send({command:'sg_calibrate_cancel'});
 window.addEventListener('pagehide',stop);

@@ -6,8 +6,10 @@
 #define PIN_TMC_ENABLE 20
 #define PIN_SW_PUSH 14
 #define PIN_SW_PULL 15
+#define PIN_SW_DOSE 13  /* Active low, internal pull-up */
 #define TMC_SPI_PORT spi0
 #define TMC_SPI_BAUD_HZ 1000000u
+#define TMC_SENSE_RESISTOR_OHM 0.1f
 #define BUTTON_DEBOUNCE_MS 30u
 #define CONTROL_PERIOD_MS 5u
 #define STATUS_PERIOD_MS 250u

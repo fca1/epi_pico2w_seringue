@@ -8,6 +8,6 @@ enum { TMC_GCONF=0x00,TMC_GSTAT=0x01,TMC_IOIN=0x04,TMC_IHOLD_IRUN=0x10,TMC_TCOOL
 typedef struct {uint8_t status;uint32_t value;bool ok;} tmc_reply_t;
 bool tmc5130_init(void); tmc_reply_t tmc5130_read(uint8_t);
 bool tmc5130_write(uint8_t,uint32_t); void tmc5130_enable(bool);
-bool tmc5130_configure(uint16_t); bool tmc5130_set_ramp(uint32_t,uint32_t,uint32_t);
+bool tmc5130_configure(uint16_t,uint16_t,uint16_t); bool tmc5130_set_ramp(uint32_t,uint32_t,uint32_t);
 bool tmc5130_velocity(int,uint32_t); bool tmc5130_position(int32_t); bool tmc5130_stop(void);
 bool tmc5130_configure_stallguard(bool enabled,int8_t threshold);

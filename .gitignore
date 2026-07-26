@@ -1,3 +1,4 @@
 build/
+build-*/
 unit_tests.exe
 .vscode/

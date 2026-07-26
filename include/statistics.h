@@ -1,0 +1,10 @@
+#pragma once
+#include <stdbool.h>
+#include <stdint.h>
+void statistics_init(void);
+void statistics_increment(void);
+void statistics_flush(void);
+bool statistics_persist(void);
+bool statistics_dirty(void);
+uint32_t statistics_activation_count(void);
+bool statistics_factory_reset(void);

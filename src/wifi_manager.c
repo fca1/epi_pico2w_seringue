@@ -1,8 +1,9 @@
 #include "wifi_manager.h"
 #include "config_store.h"
 #include "pico/cyw43_arch.h"
-#include "pico/multicore.h"
 #include "pico/util/queue.h"
+#include "FreeRTOS.h"
+#include "task.h"
 #include "lwip/tcp.h"
 #include "ws_crypto.h"
 #include <stdio.h>
@@ -14,7 +15,7 @@ static device_config_t cfg;
 static volatile wifi_state_t state;
 static volatile bool connect_requested,scan_requested,scan_running;
 static volatile uint32_t provisioning_until_ms;
-static char ip[20],telemetry[220]="{\"state\":\"BOOT\"}",scan_json[2][900]={{"{\"scanning\":false,\"networks\":[]}"},{0}};static volatile uint8_t scan_json_active;
+static char ip[20],telemetry[448]="{\"state\":\"BOOT\"}",scan_json[2][900]={{"{\"scanning\":false,\"networks\":[]}"},{0}};static volatile uint8_t scan_json_active;
 static network_t networks[MAX_NETWORKS];static volatile uint8_t network_count;
 static queue_t commands;static struct tcp_pcb *ws_client;static uint8_t ws_rx[1024];static size_t ws_rx_len;
 
@@ -39,11 +40,15 @@ static int scan_result(void*env,const cyw43_ev_scan_result_t*r){(void)env;if(!r|
 static void set_scan_json(const char*text){uint8_t next=scan_json_active^1u;snprintf(scan_json[next],sizeof(scan_json[next]),"%s",text);scan_json_active=next;}
 static void format_scan_results(void){for(uint8_t i=0;i<network_count;i++)for(uint8_t j=i+1;j<network_count;j++)if(networks[j].rssi>networks[i].rssi){network_t t=networks[i];networks[i]=networks[j];networks[j]=t;}uint8_t next=scan_json_active^1u;char*out=scan_json[next];size_t used=snprintf(out,sizeof(scan_json[next]),"{\"scanning\":false,\"networks\":[");for(uint8_t i=0;i<network_count&&used<sizeof(scan_json[next])-64;i++){char escaped[67];size_t e=0;for(size_t j=0;networks[i].ssid[j]&&e<sizeof(escaped)-2;j++){char c=networks[i].ssid[j];if(c=='\"'||c=='\\')escaped[e++]='\\';if((unsigned char)c>=32)escaped[e++]=c;}escaped[e]=0;used+=snprintf(out+used,sizeof(scan_json[next])-used,"%s{\"ssid\":\"%s\",\"rssi\":%d,\"secure\":%s}",i?",":"",escaped,networks[i].rssi,networks[i].auth?"true":"false");}snprintf(out+used,sizeof(scan_json[next])-used,"]}");scan_json_active=next;}
 
-static void network_core(void){while(true){if(scan_requested&&!scan_running){scan_requested=false;scan_running=true;network_count=0;set_scan_json("{\"scanning\":true,\"networks\":[]}");cyw43_arch_enable_sta_mode();cyw43_wifi_scan_options_t opts={0};if(cyw43_wifi_scan(&cyw43_state,&opts,NULL,scan_result)){scan_running=false;format_scan_results();}}
+static void network_task(void*arg){(void)arg;while(true){if(scan_requested&&!scan_running){scan_requested=false;scan_running=true;network_count=0;set_scan_json("{\"scanning\":true,\"networks\":[]}");cyw43_arch_enable_sta_mode();cyw43_wifi_scan_options_t opts={0};if(cyw43_wifi_scan(&cyw43_state,&opts,NULL,scan_result)){scan_running=false;format_scan_results();}}
  if(scan_running&&!cyw43_wifi_scan_active(&cyw43_state)){scan_running=false;format_scan_results();}
- if(connect_requested&&!scan_running){connect_requested=false;state=WIFI_CONNECTING;cyw43_arch_enable_sta_mode();int rc=cyw43_arch_wifi_connect_timeout_ms(cfg.wifi_ssid,cfg.wifi_password,CYW43_AUTH_WPA2_AES_PSK,20000);if(rc==0){state=WIFI_CONNECTED;provisioning_until_ms=0;snprintf(ip,sizeof(ip),"%s",ip4addr_ntoa(netif_ip4_addr(netif_default)));config_store_save(&cfg);server_start();}else state=rc==PICO_ERROR_TIMEOUT?WIFI_TIMEOUT:WIFI_AUTH_FAILED;}sleep_ms(25);}}
+ if(connect_requested&&!scan_running){connect_requested=false;state=WIFI_CONNECTING;cyw43_arch_enable_sta_mode();int rc=cyw43_arch_wifi_connect_timeout_ms(cfg.wifi_ssid,cfg.wifi_password,CYW43_AUTH_WPA2_AES_PSK,20000);if(rc==0){state=WIFI_CONNECTED;provisioning_until_ms=0;snprintf(ip,sizeof(ip),"%s",ip4addr_ntoa(netif_ip4_addr(netif_default)));device_config_t saved;config_store_load(&saved);snprintf(saved.wifi_ssid,sizeof(saved.wifi_ssid),"%s",cfg.wifi_ssid);snprintf(saved.wifi_password,sizeof(saved.wifi_password),"%s",cfg.wifi_password);config_store_save(&saved);cfg=saved;server_start();}else state=rc==PICO_ERROR_TIMEOUT?WIFI_TIMEOUT:WIFI_AUTH_FAILED;}vTaskDelay(pdMS_TO_TICKS(25));}}
 
-void wifi_manager_init(const device_config_t*c){cfg=*c;queue_init(&commands,sizeof(machine_command_t),4);state=WIFI_IDLE;if(!cfg.wifi_ssid[0])wifi_manager_open_provisioning(300000);multicore_launch_core1(network_core);if(cfg.wifi_ssid[0])connect_requested=true;}
+void wifi_manager_init(const device_config_t*c){cfg=*c;queue_init(&commands,sizeof(machine_command_t),4);state=WIFI_IDLE;if(!cfg.wifi_ssid[0])wifi_manager_open_provisioning(300000);configASSERT(xTaskCreate(network_task,"wifi",2048,NULL,3,NULL)==pdPASS);
+#if DISPENSER_WIFI_AUTOCONNECT
+ if(cfg.wifi_ssid[0])connect_requested=true;
+#endif
+}
 void wifi_manager_open_provisioning(uint32_t duration_ms){provisioning_until_ms=to_ms_since_boot(get_absolute_time())+duration_ms;}
 bool wifi_manager_provisioning_open(void){return provisioning_until_ms&&((int32_t)(provisioning_until_ms-to_ms_since_boot(get_absolute_time()))>0);}
 bool wifi_manager_set_ssid(const uint8_t*d,size_t n){if(n>32)return false;memcpy(cfg.wifi_ssid,d,n);cfg.wifi_ssid[n]=0;return true;}
@@ -55,4 +60,4 @@ wifi_state_t wifi_manager_state(void){return state;}
 const char*wifi_manager_state_name(void){static const char*n[]={"IDLE","CONNECTING","CONNECTED","AUTH_FAILED","NETWORK_NOT_FOUND","TIMEOUT"};return n[state];}
 const char*wifi_manager_ip(void){return ip;}
 bool wifi_manager_take_command(machine_command_t*c){return queue_try_remove(&commands,c);}
-void wifi_manager_publish(const char*j){size_t n=strlen(j);if(n>=sizeof(telemetry))n=sizeof(telemetry)-1;cyw43_arch_lwip_begin();memcpy(telemetry,j,n);telemetry[n]=0;if(ws_client){uint8_t frame[224];size_t pos=0;frame[pos++]=0x81;if(n<126)frame[pos++]=(uint8_t)n;else{frame[pos++]=126;frame[pos++]=(uint8_t)(n>>8);frame[pos++]=(uint8_t)n;}memcpy(frame+pos,telemetry,n);if(tcp_write(ws_client,frame,pos+n,TCP_WRITE_FLAG_COPY)==ERR_OK)tcp_output(ws_client);}cyw43_arch_lwip_end();}
+void wifi_manager_publish(const char*j){size_t n=strlen(j);if(n>=sizeof(telemetry))n=sizeof(telemetry)-1;cyw43_arch_lwip_begin();memcpy(telemetry,j,n);telemetry[n]=0;if(ws_client){uint8_t frame[452];size_t pos=0;frame[pos++]=0x81;if(n<126)frame[pos++]=(uint8_t)n;else{frame[pos++]=126;frame[pos++]=(uint8_t)(n>>8);frame[pos++]=(uint8_t)n;}memcpy(frame+pos,telemetry,n);if(tcp_write(ws_client,frame,pos+n,TCP_WRITE_FLAG_COPY)==ERR_OK)tcp_output(ws_client);}cyw43_arch_lwip_end();}
