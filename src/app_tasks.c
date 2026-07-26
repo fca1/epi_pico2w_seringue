@@ -70,12 +70,14 @@ static bool apply_config_value(config_param_t parameter,float value){device_conf
  case CFG_SCREW_PITCH_MM:next.screw_pitch_mm=value;break;case CFG_MOTOR_STEPS_PER_REV:next.motor_steps_per_rev=(uint16_t)value;break;case CFG_MICROSTEPS:next.microsteps=(uint16_t)value;break;
  case CFG_RUN_CURRENT_MA:next.motor_run_current_mA=(uint16_t)value;break;case CFG_HOLD_CURRENT_MA:next.motor_hold_current_mA=(uint16_t)value;break;
  case CFG_MANUAL_SPEED_MM_S:next.manual_speed_mm_s=value;break;case CFG_DOSING_SPEED_MM_S:next.dosing_speed_mm_s=value;break;case CFG_TRIGGER_DOSE_MM:next.trigger_dose_mm=value;break;
- case CFG_ACCELERATION_MM_S2:next.acceleration_mm_s2=value;break;case CFG_RETRACT_DISTANCE_MM:next.retract_distance_mm=value;break;case CFG_RETRACT_SPEED_MM_S:next.retract_speed_mm_s=value;break;
+ case CFG_A1_MM_S2:next.a1_mm_s2=value;break;case CFG_AMAX_MM_S2:next.amax_mm_s2=value;break;case CFG_DMAX_MM_S2:next.dmax_mm_s2=value;break;case CFG_D1_MM_S2:next.d1_mm_s2=value;break;
+ case CFG_RETRACT_DISTANCE_MM:next.retract_distance_mm=value;break;case CFG_RETRACT_SPEED_MM_S:next.retract_speed_mm_s=value;break;
  case CFG_RETRACT_DELAY_MS:next.retract_delay_ms=(uint32_t)value;break;case CFG_POSITION_MIN_MM:next.position_min_mm=value;break;case CFG_POSITION_MAX_MM:next.position_max_mm=value;break;
  case CFG_MANUAL_TIMEOUT_MS:next.manual_timeout_ms=(uint32_t)value;break;case CFG_STALLGUARD_THRESHOLD:next.stallguard_threshold=(int8_t)value;break;
  case CFG_STALLGUARD_WARNING:next.stallguard_warning_level=(uint16_t)value;break;case CFG_STALLGUARD_CRITICAL:next.stallguard_critical_level=(uint16_t)value;break;
  case CFG_STALLGUARD_FILTER_COUNT:next.stallguard_filter_count=(uint16_t)value;break;case CFG_STALLGUARD_ENABLED:next.stallguard_enabled=value!=0;break;default:return false;}
- if(!device_config_validate(&next)||!config_store_save(&next))return false;config=next;return true;}
+ motor_config_t candidate={.motor_steps_per_rev=next.motor_steps_per_rev,.microsteps=next.microsteps,.motor_run_current_mA=next.motor_run_current_mA,.motor_hold_current_mA=next.motor_hold_current_mA,.screw_pitch_mm=next.screw_pitch_mm,.manual_speed_mm_s=next.manual_speed_mm_s,.a1_mm_s2=next.a1_mm_s2,.amax_mm_s2=next.amax_mm_s2,.dmax_mm_s2=next.dmax_mm_s2,.d1_mm_s2=next.d1_mm_s2};
+ if(!device_config_validate(&next)||!motor_config_valid(&candidate)||!config_store_save(&next))return false;config=next;return true;}
 
 static void execute(machine_command_t *c,uint32_t now){
  if(c->kind==CMD_STOP||c->kind==CMD_PUSH_STOP||c->kind==CMD_PULL_STOP){stop_motion();return;}
@@ -175,13 +177,14 @@ static void print_help(void){
  puts("MOVE <mm> [mm/s] | UNLOAD [mm/s] | ZERO | FAULTRESET | RESET");
  puts("SET <parameter> <value> | SGCAL START|FINISH|CANCEL | FLUSH");
  puts("Parameters: screw_pitch_mm motor_steps_per_rev microsteps motor_run_current_mA motor_hold_current_mA");
- puts(" manual_speed_mm_s dosing_speed_mm_s trigger_dose_mm acceleration_mm_s2 retract_distance_mm retract_speed_mm_s");
+ puts(" manual_speed_mm_s dosing_speed_mm_s trigger_dose_mm a1_mm_s2 amax_mm_s2 dmax_mm_s2 d1_mm_s2");
+ puts(" retract_distance_mm retract_speed_mm_s");
  puts(" retract_delay_ms position_min_mm position_max_mm manual_timeout_ms stallguard_threshold stallguard_warning_level");
  puts(" stallguard_critical_level stallguard_filter_count stallguard_enabled");
  puts("RESET reboots the controller; settings are saved in flash. Mechanical settings take full effect after RESET.");
 }
-static void print_config(void){printf("CONFIG version=%lu screw_pitch_mm=%.3f motor_steps_per_rev=%u microsteps=%u motor_run_current_mA=%u motor_hold_current_mA=%u manual_speed_mm_s=%.3f dosing_speed_mm_s=%.3f trigger_dose_mm=%.3f acceleration_mm_s2=%.3f retract_distance_mm=%.3f retract_speed_mm_s=%.3f retract_delay_ms=%lu position_min_mm=%.3f position_max_mm=%.3f manual_timeout_ms=%lu stallguard_threshold=%d stallguard_warning_level=%u stallguard_critical_level=%u stallguard_filter_count=%u stallguard_enabled=%u\n",
- (unsigned long)config.version,config.screw_pitch_mm,config.motor_steps_per_rev,config.microsteps,config.motor_run_current_mA,config.motor_hold_current_mA,config.manual_speed_mm_s,config.dosing_speed_mm_s,config.trigger_dose_mm,config.acceleration_mm_s2,config.retract_distance_mm,config.retract_speed_mm_s,(unsigned long)config.retract_delay_ms,config.position_min_mm,config.position_max_mm,(unsigned long)config.manual_timeout_ms,config.stallguard_threshold,config.stallguard_warning_level,config.stallguard_critical_level,config.stallguard_filter_count,config.stallguard_enabled);}
+static void print_config(void){printf("CONFIG version=%lu screw_pitch_mm=%.3f motor_steps_per_rev=%u microsteps=%u motor_run_current_mA=%u motor_hold_current_mA=%u manual_speed_mm_s=%.3f dosing_speed_mm_s=%.3f trigger_dose_mm=%.3f a1_mm_s2=%.3f amax_mm_s2=%.3f dmax_mm_s2=%.3f d1_mm_s2=%.3f retract_distance_mm=%.3f retract_speed_mm_s=%.3f retract_delay_ms=%lu position_min_mm=%.3f position_max_mm=%.3f manual_timeout_ms=%lu stallguard_threshold=%d stallguard_warning_level=%u stallguard_critical_level=%u stallguard_filter_count=%u stallguard_enabled=%u\n",
+ (unsigned long)config.version,config.screw_pitch_mm,config.motor_steps_per_rev,config.microsteps,config.motor_run_current_mA,config.motor_hold_current_mA,config.manual_speed_mm_s,config.dosing_speed_mm_s,config.trigger_dose_mm,config.a1_mm_s2,config.amax_mm_s2,config.dmax_mm_s2,config.d1_mm_s2,config.retract_distance_mm,config.retract_speed_mm_s,(unsigned long)config.retract_delay_ms,config.position_min_mm,config.position_max_mm,(unsigned long)config.manual_timeout_ms,config.stallguard_threshold,config.stallguard_warning_level,config.stallguard_critical_level,config.stallguard_filter_count,config.stallguard_enabled);}
 
 static void usb_command_task(void *arg){
  (void)arg;char line[512];size_t used=0;
@@ -198,7 +201,7 @@ static void led_task(void *arg){(void)arg;TickType_t wake=xTaskGetTickCount();fo
 
 void app_tasks_start(void){
  buttons_init();config_store_load(&config);statistics_init();
- motor_cfg=(motor_config_t){.motor_steps_per_rev=config.motor_steps_per_rev,.microsteps=config.microsteps,.motor_run_current_mA=config.motor_run_current_mA,.motor_hold_current_mA=config.motor_hold_current_mA,.screw_pitch_mm=config.screw_pitch_mm,.manual_speed_mm_s=config.manual_speed_mm_s,.acceleration_mm_s2=config.acceleration_mm_s2};
+ motor_cfg=(motor_config_t){.motor_steps_per_rev=config.motor_steps_per_rev,.microsteps=config.microsteps,.motor_run_current_mA=config.motor_run_current_mA,.motor_hold_current_mA=config.motor_hold_current_mA,.screw_pitch_mm=config.screw_pitch_mm,.manual_speed_mm_s=config.manual_speed_mm_s,.a1_mm_s2=config.a1_mm_s2,.amax_mm_s2=config.amax_mm_s2,.dmax_mm_s2=config.dmax_mm_s2,.d1_mm_s2=config.d1_mm_s2};
  app_state_init(&machine);safety_init(&safety);bool motor_ok=motor_init(&motor_cfg);
 #if DISPENSER_HAS_RADIO
  status_led_init(false);

@@ -67,11 +67,37 @@ Exemple : `SET dosing_speed_mm_s 4`
 
 La valeur est validée puis sauvegardée en flash. Paramètres : `screw_pitch_mm`,
 `motor_steps_per_rev`, `microsteps`, `motor_run_current_mA`, `motor_hold_current_mA`,
-`manual_speed_mm_s`, `dosing_speed_mm_s`, `trigger_dose_mm`, `acceleration_mm_s2`,
+`manual_speed_mm_s`, `dosing_speed_mm_s`, `trigger_dose_mm`, `a1_mm_s2`,
+`amax_mm_s2`, `dmax_mm_s2`, `d1_mm_s2`,
 `retract_distance_mm`, `retract_speed_mm_s`, `retract_delay_ms`, `position_min_mm`,
 `position_max_mm`, `manual_timeout_ms`, `stallguard_threshold`,
 `stallguard_warning_level`, `stallguard_critical_level`, `stallguard_filter_count` et
 `stallguard_enabled`. Les paramètres mécaniques prennent complètement effet après `RESET`.
+
+Les quatre accélérations constituent le profil trapézoïdal avancé du TMC5130 : `A1` puis
+`AMAX` pendant l’accélération, `DMAX` puis `D1` pendant la décélération. Elles sont données
+en `mm/s²`, sauvegardées en flash et appliquées après redémarrage. Exemple série :
+
+```text
+SET a1_mm_s2 80
+SET amax_mm_s2 200
+SET dmax_mm_s2 180
+SET d1_mm_s2 60
+RESET
+```
+
+En BLE, HTTP API ou WebSocket, utiliser successivement :
+
+```json
+{"command":"set_config","parameter":"a1_mm_s2","value":80}
+{"command":"set_config","parameter":"amax_mm_s2","value":200}
+{"command":"set_config","parameter":"dmax_mm_s2","value":180}
+{"command":"set_config","parameter":"d1_mm_s2","value":60}
+{"command":"reboot"}
+```
+
+Ces réglages sont volontairement absents de l’interface graphique HTTP : ils restent
+accessibles par l’API HTTP avancée, le WebSocket, le BLE et l’USB série.
 
 <div style="break-after: page; page-break-after: always;"></div>
 

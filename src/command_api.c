@@ -7,7 +7,8 @@ static bool same_name(const char*a,const char*b){while(*a&&*b){if(tolower((unsig
 static config_param_t parameter(const char*s){struct{const char*n;config_param_t p;}map[]={
  {"screw_pitch_mm",CFG_SCREW_PITCH_MM},{"motor_steps_per_rev",CFG_MOTOR_STEPS_PER_REV},{"microsteps",CFG_MICROSTEPS},
  {"motor_run_current_mA",CFG_RUN_CURRENT_MA},{"motor_hold_current_mA",CFG_HOLD_CURRENT_MA},{"manual_speed_mm_s",CFG_MANUAL_SPEED_MM_S},
- {"dosing_speed_mm_s",CFG_DOSING_SPEED_MM_S},{"trigger_dose_mm",CFG_TRIGGER_DOSE_MM},{"acceleration_mm_s2",CFG_ACCELERATION_MM_S2},
+ {"dosing_speed_mm_s",CFG_DOSING_SPEED_MM_S},{"trigger_dose_mm",CFG_TRIGGER_DOSE_MM},
+ {"a1_mm_s2",CFG_A1_MM_S2},{"amax_mm_s2",CFG_AMAX_MM_S2},{"dmax_mm_s2",CFG_DMAX_MM_S2},{"d1_mm_s2",CFG_D1_MM_S2},
  {"retract_distance_mm",CFG_RETRACT_DISTANCE_MM},{"retract_speed_mm_s",CFG_RETRACT_SPEED_MM_S},{"retract_delay_ms",CFG_RETRACT_DELAY_MS},
  {"position_min_mm",CFG_POSITION_MIN_MM},{"position_max_mm",CFG_POSITION_MAX_MM},{"manual_timeout_ms",CFG_MANUAL_TIMEOUT_MS},
  {"stallguard_threshold",CFG_STALLGUARD_THRESHOLD},{"stallguard_warning_level",CFG_STALLGUARD_WARNING},{"stallguard_critical_level",CFG_STALLGUARD_CRITICAL},

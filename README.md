@@ -335,7 +335,10 @@ est arrêté sans passer en `FAULT` et la position est recalée sur `position_mi
 | `manual_speed_mm_s` | 5,0 | vitesse PUSH/PULL |
 | `dosing_speed_mm_s` | 5,0 | vitesse du dosage physique |
 | `trigger_dose_mm` | 0,80 | course commandée par GP13 |
-| `acceleration_mm_s2` | 100 | accélération et décélération |
+| `a1_mm_s2` | 100 | première phase d’accélération TMC5130 |
+| `amax_mm_s2` | 100 | accélération principale TMC5130 |
+| `dmax_mm_s2` | 100 | première phase de décélération TMC5130 |
+| `d1_mm_s2` | 100 | décélération finale TMC5130 |
 | `retract_distance_mm` | 0,10 | recul après dosage |
 | `retract_speed_mm_s` | 3,0 | vitesse de recul |
 | `retract_delay_ms` | 50 | attente avant recul |
