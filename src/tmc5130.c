@@ -26,4 +26,4 @@ bool tmc5130_set_ramp(uint32_t v,uint32_t a,uint32_t d){return tmc5130_write(TMC
 bool tmc5130_velocity(int d,uint32_t v){return tmc5130_write(TMC_VMAX,v)&&tmc5130_write(TMC_RAMPMODE,d>0?1:2);}
 bool tmc5130_position(int32_t t){return tmc5130_write(TMC_RAMPMODE,0)&&tmc5130_write(TMC_XTARGET,(uint32_t)t);}
 bool tmc5130_stop(void){return tmc5130_write(TMC_VMAX,0);}
-bool tmc5130_configure_stallguard(bool enabled,int8_t threshold){if(!enabled)return tmc5130_write(TMC_COOLCONF,0);if(threshold<-64||threshold>63)return false;return tmc5130_write(TMC_COOLCONF,((uint32_t)threshold&0x7fu)<<16);}
+bool tmc5130_configure_stallguard(bool enabled,int8_t threshold){if(!enabled)return tmc5130_write(TMC_TCOOLTHRS,0)&&tmc5130_write(TMC_COOLCONF,0);if(threshold<-64||threshold>63)return false;return tmc5130_write(TMC_COOLCONF,((uint32_t)threshold&0x7fu)<<16)&&tmc5130_write(TMC_TCOOLTHRS,0xfffffu);}

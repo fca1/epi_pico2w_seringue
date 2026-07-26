@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 
 add_executable(paste_dispenser src/main.c src/app_state.c src/buttons.c src/motor_control.c
-  src/tmc5130.c src/config_store.c src/safety.c src/command_api.c src/ble_service.c src/wifi_manager.c)
+  src/tmc5130.c src/config_store.c src/safety.c src/command_api.c src/ble_service.c src/wifi_manager.c src/stallguard_calibration.c)
 target_include_directories(paste_dispenser PRIVATE include)
 target_link_libraries(paste_dispenser pico_stdlib hardware_spi hardware_flash pico_flash
   pico_btstack_ble pico_btstack_cyw43 pico_cyw43_arch_lwip_threadsafe_background pico_multicore)

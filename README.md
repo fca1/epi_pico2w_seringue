@@ -12,6 +12,11 @@ refuse les commandes concurrentes et arrête le moteur si les deux boutons sont 
   déconnexion. Interface Web Bluetooth avec `pointerdown/up/cancel`.
 - Sécurité : conflit de boutons, erreur SPI, surchauffe, timeout manuel, limites logicielles
   et StallGuard filtré. Ces fonctions doivent être étalonnées et validées sur le matériel.
+- Calibration StallGuard relative : `sg_calibrate_start`, déplacement manuel sur une zone
+  normale (100 échantillons minimum), puis `sg_calibrate_finish`. Le firmware mémorise la
+  référence et fixe provisoirement LOAD_HIGH à 70 % et STALL_ERROR à 50 % de cette valeur.
+  Ces ratios sont des points de départ, pas une mesure de force ; refaire la calibration
+  après toute modification de vitesse, courant, moteur, vis, seringue ou pâte.
 - Configuration persistante versionnée avec CRC et deux secteurs flash alternés, séparés
   des secteurs réservés par BTstack.
 - Provisionnement Wi-Fi BLE par SSID/mot de passe manuel, reconnexion au démarrage et
@@ -61,7 +66,7 @@ volume USB `RPI-RP2`. La sortie JSON de diagnostic est disponible sur USB CDC.
 Avec GCC/MinGW :
 
 ```powershell
-gcc -std=c11 -DUNIT_TEST -Iinclude tests/test_main.c src/app_state.c src/motor_control.c src/command_api.c src/safety.c -lm -o unit_tests.exe
+gcc -std=c11 -DUNIT_TEST -Iinclude tests/test_main.c src/app_state.c src/motor_control.c src/command_api.c src/safety.c src/stallguard_calibration.c -lm -o unit_tests.exe
 ./unit_tests.exe
 ```
 

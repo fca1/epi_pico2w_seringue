@@ -1,7 +1,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#define DEVICE_CONFIG_VERSION 1u
+#define DEVICE_CONFIG_VERSION 2u
 typedef struct {
  uint32_t version,sequence; char wifi_ssid[33],wifi_password[65];
  float screw_pitch_mm; uint16_t motor_steps_per_rev,microsteps;
@@ -9,6 +9,7 @@ typedef struct {
  float retract_distance_mm,retract_speed_mm_s; uint32_t retract_delay_ms;
  float position_min_mm,position_max_mm; uint32_t manual_timeout_ms;
  int8_t stallguard_threshold; uint16_t stallguard_warning_level,stallguard_filter_count;
+ uint16_t stallguard_critical_level,stallguard_baseline;float stallguard_calibration_speed_mm_s;
  uint8_t stallguard_enabled; uint32_t crc;
 } device_config_t;
 void device_config_defaults(device_config_t *cfg);

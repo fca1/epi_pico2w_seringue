@@ -10,14 +10,19 @@
 #include "wifi_manager.h"
 #include "hardware/watchdog.h"
 #include "hardware/gpio.h"
+#include "stallguard_calibration.h"
 static device_config_t config;static motor_config_t motor_cfg;static app_machine_t machine;
 static safety_t safety;static int direction;static uint32_t phase_ms;static float retract_mm;
+static sg_calibration_t sg_cal;
 static void fault(safety_fault_t f){motor_stop();machine.fault_code=f;app_state_dispatch(&machine,EVT_FAULT);direction=0;}
 static bool begin_manual(int d,uint32_t now){if(machine.state!=APP_READY||!motor_manual(d))return false;direction=d;safety_manual_started(&safety,now);app_state_dispatch(&machine,d>0?EVT_PUSH:EVT_PULL);return true;}
 static void stop_motion(void){motor_stop();direction=0;if(machine.state!=APP_FAULT)app_state_dispatch(&machine,EVT_STOP);}
 static void execute(machine_command_t*c,uint32_t now){
  if(c->kind==CMD_STOP||c->kind==CMD_PUSH_STOP||c->kind==CMD_PULL_STOP){stop_motion();return;}
  if(c->kind==CMD_RESET&&machine.state==APP_FAULT){safety_init(&safety);app_state_dispatch(&machine,EVT_RESET);return;}
+ if(c->kind==CMD_SG_CAL_CANCEL){sg_cal.active=false;motor_configure_stallguard(config.stallguard_enabled,config.stallguard_threshold);return;}
+ if(c->kind==CMD_SG_CAL_START&&machine.state==APP_READY){sg_calibration_start(&sg_cal);motor_configure_stallguard(true,config.stallguard_threshold);return;}
+ if(c->kind==CMD_SG_CAL_FINISH&&machine.state==APP_READY){uint16_t baseline,warning,critical;if(sg_calibration_finish(&sg_cal,&baseline,&warning,&critical)){config.stallguard_baseline=baseline;config.stallguard_warning_level=warning;config.stallguard_critical_level=critical;config.stallguard_calibration_speed_mm_s=config.manual_speed_mm_s;config.stallguard_enabled=1;config_store_save(&config);motor_configure_stallguard(true,config.stallguard_threshold);}return;}
  if(machine.state!=APP_READY)return;
  switch(c->kind){case CMD_PUSH_START:begin_manual(1,now);break;case CMD_PULL_START:begin_manual(-1,now);break;
  case CMD_SET_ZERO:motor_set_zero();break;case CMD_MOVE_RELATIVE:if(motor_move_relative(c->distance_mm,c->speed_mm_s>0?c->speed_mm_s:config.dosing_speed_mm_s)){direction=c->distance_mm>=0?1:-1;retract_mm=0;app_state_dispatch(&machine,EVT_DOSE);}break;
@@ -37,9 +42,9 @@ int main(void){stdio_init_all();buttons_init();config_store_load(&config);
    if(machine.state==APP_DOSING&&motor_target_reached()){direction=0;if(retract_mm>0){app_state_dispatch(&machine,EVT_MOVE_DONE);phase_ms=now;}else{app_state_dispatch(&machine,EVT_MOVE_DONE);app_state_dispatch(&machine,EVT_MOVE_DONE);}}
    if(machine.state==APP_RETRACTING&&direction==0&&now-phase_ms>=config.retract_delay_ms){if(motor_move_relative(-retract_mm,config.retract_speed_mm_s))direction=-1;else fault(SAFETY_SPI);}
    else if(machine.state==APP_RETRACTING&&direction<0&&motor_target_reached()){direction=0;app_state_dispatch(&machine,EVT_MOVE_DONE);}
-   bool spi=true;uint32_t ds=motor_driver_status(&spi);float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());bool manual=machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL;
-   safety_fault_t sf=safety_check(&safety,&config,false,manual,now,ds,spi,pos,direction);if(sf)fault(sf);
+   bool spi=true;uint32_t ds=motor_driver_status(&spi);float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());bool manual=machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL;if(sg_cal.active&&manual)sg_calibration_add(&sg_cal,ds&0x3ffu);
+   device_config_t safety_cfg=config;if(sg_cal.active)safety_cfg.stallguard_enabled=0;safety_fault_t sf=safety_check(&safety,&safety_cfg,false,manual,now,ds,spi,pos,direction);if(sf)fault(sf);
   }} old=b;
-  if(now-last>=STATUS_PERIOD_MS){float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());snprintf(json,sizeof(json),"{\"state\":\"%s\",\"position_mm\":%.3f,\"sg_result\":%u,\"fault\":%lu,\"wifi\":\"%s\"}",app_state_name(machine.state),(double)pos,safety.sg_filtered,(unsigned long)machine.fault_code,wifi_manager_state_name());puts(json);if(ble_ok){ble_service_publish(json);wifi_manager_publish(json);}last=now;}
+  if(now-last>=STATUS_PERIOD_MS){float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());snprintf(json,sizeof(json),"{\"state\":\"%s\",\"position_mm\":%.3f,\"sg_result\":%u,\"load\":%u,\"sg_calibrating\":%s,\"sg_samples\":%lu,\"fault\":%lu}",app_state_name(machine.state),(double)pos,safety.sg_filtered,safety.load_state,sg_cal.active?"true":"false",(unsigned long)sg_cal.samples,(unsigned long)machine.fault_code);puts(json);if(ble_ok){ble_service_publish(json);wifi_manager_publish(json);}last=now;}
   sleep_ms(CONTROL_PERIOD_MS);
  }}

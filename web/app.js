@@ -27,4 +27,5 @@ document.querySelector('#wifi').onclick=async()=>{try{const service=await device
  setTimeout(async()=>{const s=dec.decode(await (await service.getCharacteristic(WIFI_STATUS)).readValue());const ip=dec.decode(await (await service.getCharacteristic(IP)).readValue());wifiStatus.innerHTML=s+(ip?` — <a href="http://${ip}">http://${ip}</a>`:'');},22000);
  }catch(e){wifiStatus.textContent=e.message;}};
 document.querySelector('#dose').onclick=()=>send({command:'dose',distance_mm:+distance.value,retract_mm:+retract.value,speed_mm_s:+speed.value}).catch(e=>show(e.message));
+sgStart.onclick=()=>send({command:'sg_calibrate_start'});sgFinish.onclick=()=>send({command:'sg_calibrate_finish'});sgCancel.onclick=()=>send({command:'sg_calibrate_cancel'});
 window.addEventListener('pagehide',stop);
