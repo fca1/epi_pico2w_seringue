@@ -7,6 +7,9 @@ refuse les commandes concurrentes et arrête le moteur si les deux boutons sont 
 Le firmware utilise FreeRTOS en mode SMP sur les deux cœurs RP2350. Il est construit pour
 la Pico 2 sans radio ou pour la Pico 2 W avec BLE et Wi-Fi.
 
+La référence imprimable des trois interfaces — USB série, BLE et Wi-Fi — avec une page
+par commande se trouve dans [`docs/communications.md`](docs/communications.md).
+
 ## Découpage FreeRTOS
 
 | Tâche | Priorité | Responsabilité |
