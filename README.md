@@ -19,15 +19,14 @@ refuse les commandes concurrentes et arrête le moteur si les deux boutons sont 
   après toute modification de vitesse, courant, moteur, vis, seringue ou pâte.
 - Configuration persistante versionnée avec CRC et deux secteurs flash alternés, séparés
   des secteurs réservés par BTstack.
-- Provisionnement Wi-Fi BLE par SSID/mot de passe manuel, reconnexion au démarrage et
-  serveur HTTP local avec interface embarquée, télémétrie JSON et commandes HTTP.
+- Provisionnement Wi-Fi BLE avec scan SSID, liste classée/dédupliquée, saisie du mot de
+  passe, reconnexion au démarrage et serveur HTTP local avec interface embarquée.
 - Le provisionnement est ouvert cinq minutes au premier démarrage ou en maintenant PULL
   pendant le démarrage. Maintenir PUSH et PULL cinq secondes efface la configuration puis
   redémarre la carte.
-- Limite actuelle : le scan SSID et le WebSocket ne sont pas activés ; l’interface locale
-  utilise `GET /api/status` et `POST /api/command`. Cela conserve la commande locale mais
-  doit évoluer vers WebSocket si une détection de disparition client plus rapide que le
-  timeout manuel configuré est exigée.
+- L’interface locale utilise `ws://adresse-ip/ws` pour les commandes et la télémétrie.
+  Une fermeture TCP/WebSocket injecte immédiatement `STOP`. `GET /api/status` et
+  `POST /api/command` restent disponibles pour le diagnostic et la compatibilité.
 
 Le prototype ne doit pas être utilisé sans arrêt d’urgence matériel et validation sur banc.
 
@@ -66,7 +65,7 @@ volume USB `RPI-RP2`. La sortie JSON de diagnostic est disponible sur USB CDC.
 Avec GCC/MinGW :
 
 ```powershell
-gcc -std=c11 -DUNIT_TEST -Iinclude tests/test_main.c src/app_state.c src/motor_control.c src/command_api.c src/safety.c src/stallguard_calibration.c -lm -o unit_tests.exe
+gcc -std=c11 -DUNIT_TEST -Iinclude tests/test_main.c src/app_state.c src/motor_control.c src/command_api.c src/safety.c src/stallguard_calibration.c src/ws_crypto.c -lm -o unit_tests.exe
 ./unit_tests.exe
 ```
 

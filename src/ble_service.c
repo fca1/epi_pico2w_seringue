@@ -12,6 +12,7 @@ static uint16_t read_cb(hci_con_handle_t c,uint16_t handle,uint16_t offset,uint8
  if(handle==ATT_CHARACTERISTIC_7e400003_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE)return att_read_callback_handle_blob((const uint8_t*)status_json,status_len,offset,buffer,size);
  if(handle==ATT_CHARACTERISTIC_7e400007_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE){const char*s=wifi_manager_state_name();return att_read_callback_handle_blob((const uint8_t*)s,strlen(s),offset,buffer,size);}
  if(handle==ATT_CHARACTERISTIC_7e400008_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE){const char*s=wifi_manager_ip();return att_read_callback_handle_blob((const uint8_t*)s,strlen(s),offset,buffer,size);}
+ if(handle==ATT_CHARACTERISTIC_7e40000a_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE){const char*s=wifi_manager_scan_results();return att_read_callback_handle_blob((const uint8_t*)s,strlen(s),offset,buffer,size);}
  if(handle==ATT_CHARACTERISTIC_GAP_APPEARANCE_01_VALUE_HANDLE){uint16_t appearance=0;return att_read_callback_handle_little_endian_16(appearance,offset,buffer,size);}
  return 0;}
 static int write_cb(hci_con_handle_t c,uint16_t handle,uint16_t mode,uint16_t offset,uint8_t*buffer,uint16_t size){(void)c;(void)mode;if(offset)return ATT_ERROR_INVALID_OFFSET;
@@ -19,6 +20,7 @@ static int write_cb(hci_con_handle_t c,uint16_t handle,uint16_t mode,uint16_t of
  if(handle==ATT_CHARACTERISTIC_7e400004_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE)return wifi_manager_provisioning_open()&&wifi_manager_set_ssid(buffer,size)?0:ATT_ERROR_WRITE_REQUEST_REJECTED;
  if(handle==ATT_CHARACTERISTIC_7e400005_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE)return wifi_manager_provisioning_open()&&wifi_manager_set_password(buffer,size)?0:ATT_ERROR_WRITE_REQUEST_REJECTED;
  if(handle==ATT_CHARACTERISTIC_7e400006_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE)return wifi_manager_provisioning_open()&&wifi_manager_request_connect()?0:ATT_ERROR_WRITE_REQUEST_REJECTED;
+ if(handle==ATT_CHARACTERISTIC_7e400009_b5a3_f393_e0a9_e50e24dcca9e_01_VALUE_HANDLE)return wifi_manager_provisioning_open()&&wifi_manager_request_scan()?0:ATT_ERROR_WRITE_REQUEST_REJECTED;
  return 0;}
 static void packet_handler(uint8_t type,uint16_t channel,uint8_t*packet,uint16_t size){(void)channel;(void)size;if(type!=HCI_EVENT_PACKET)return;switch(hci_event_packet_get_type(packet)){
  case HCI_EVENT_META_GAP:if(hci_event_gap_meta_get_subevent_code(packet)==GAP_SUBEVENT_LE_CONNECTION_COMPLETE)connection=gap_subevent_le_connection_complete_get_connection_handle(packet);break;

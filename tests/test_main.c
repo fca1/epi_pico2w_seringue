@@ -7,6 +7,7 @@
 #include "command_api.h"
 #include "safety.h"
 #include "stallguard_calibration.h"
+#include "ws_crypto.h"
 int main(void){
  motor_config_t c={200,16,2.0f,5.0f,100.0f};
  assert(fabsf(motor_microsteps_per_mm(&c)-1600.0f)<.001f);
@@ -19,5 +20,6 @@ int main(void){
  const char *json="{\"command\":\"dose\",\"distance_mm\":0.8,\"speed_mm_s\":5}";machine_command_t cmd;assert(command_parse_json(json,strlen(json),&cmd));assert(cmd.kind==CMD_DOSE&&fabsf(cmd.distance_mm-.8f)<.001f);
  device_config_t d={.manual_timeout_ms=1000,.position_min_mm=0,.position_max_mm=10,.stallguard_filter_count=3,.stallguard_warning_level=100};safety_t s;safety_init(&s);safety_manual_started(&s,10);assert(safety_check(&s,&d,false,true,500,200,true,5,1)==SAFETY_OK);assert(safety_check(&s,&d,false,true,1011,200,true,5,1)==SAFETY_TIMEOUT);
  sg_calibration_t cal;uint16_t baseline,warning,critical;sg_calibration_start(&cal);for(int i=0;i<120;i++)sg_calibration_add(&cal,400+(i%5));assert(sg_calibration_finish(&cal,&baseline,&warning,&critical));assert(baseline==402&&warning==281&&critical==201);
+ char accept[29];assert(ws_crypto_accept("dGhlIHNhbXBsZSBub25jZQ==",24,accept));assert(!strcmp(accept,"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));
  puts("All tests passed");
 }
