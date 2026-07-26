@@ -408,6 +408,18 @@ démonstration. Le mot de passe n’est jamais écrit dans les traces du program
 de provisionnement doit être ouverte : premier démarrage, compilation avec auto-connexion
 désactivée, ou maintien de PULL pendant le démarrage.
 
+L’exemple `example/ble_stallguard_calibration_5mm.py` configure une vis de `2 mm/tr`,
+redémarre la carte pour appliquer ce paramètre mécanique, puis calibre StallGuard pendant
+une avance mesurée de `5 mm` à `1 mm/s` :
+
+```powershell
+python example/ble_stallguard_calibration_5mm.py
+```
+
+La zone parcourue doit être libre de butée et soumise à la charge mécanique normale. Le
+programme exige l’état `READY`, au moins 5 mm de course restante et 100 échantillons avant
+de sauvegarder la calibration.
+
 ## Référence des primitives de communication
 
 Chaque primitive ci-dessous correspond à une opération complète disponible pour un client.
