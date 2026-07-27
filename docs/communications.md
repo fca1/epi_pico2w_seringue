@@ -37,7 +37,7 @@ puis `OK`.
 
 Envoi : `VERSION`
 
-Retour : la version courante, par exemple `PasteDispenser 1.4.0`, puis `OK`.
+Retour : la version courante, par exemple `PasteDispenser 1.4.1`, puis `OK`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 

@@ -10,7 +10,7 @@
 #define PAGES_PER_SECTOR (STATS_SECTOR_SIZE/FLASH_PAGE_SIZE)
 typedef struct{uint32_t magic,sequence,count,crc;} record_t;
 static uint32_t count,sequence,current_sector,current_page;static bool dirty;
-static uint32_t crc32(const void*d,size_t n){uint32_t c=0xffffffffu;const uint8_t*p=d;while(n--){c^=*p++;for(int i=0;i<8;i++)c=(c>>1)^(0xedb88320u&-(int32_t)(c&1));}return~c;}
+static uint32_t crc32(const void*d,size_t n){uint32_t c=0xffffffffu;const uint8_t*p=d;while(n--){c^=*p++;for(int i=0;i<8;i++)c=(c>>1)^(0xedb88320u&(0u-(c&1u)));}return~c;}
 static bool valid(const record_t*r){return r->magic==STATS_MAGIC&&r->crc==crc32(r,offsetof(record_t,crc));}
 void statistics_init(void){count=sequence=current_sector=current_page=0;dirty=false;bool found=false;for(uint32_t s=0;s<2;s++)for(uint32_t p=0;p<PAGES_PER_SECTOR;p++){const record_t*r=(const void*)(XIP_BASE+STATS_OFFSET+s*STATS_SECTOR_SIZE+p*FLASH_PAGE_SIZE);if(valid(r)&&(!found||r->sequence>sequence)){found=true;sequence=r->sequence;count=r->count;current_sector=s;current_page=p;}}}
 void statistics_increment(void){count++;dirty=true;}void statistics_flush(void){count=0;dirty=true;}bool statistics_dirty(void){return dirty;}uint32_t statistics_activation_count(void){return count;}

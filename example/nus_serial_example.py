@@ -1,4 +1,4 @@
-"""Exemple minimal de liaison série BLE Nordic UART Service."""
+"""Send one safe ASCII command over Nordic UART Service."""
 import argparse
 import asyncio
 
@@ -16,7 +16,12 @@ async def main(command: str) -> None:
     )
     if device is None:
         raise RuntimeError("PasteDispenser NUS introuvable")
-    async with BleakClient(device) as client:
+    print(f"Connexion à {device.name or device.address} ({device.address})")
+    async with BleakClient(
+        device,
+        timeout=15,
+        winrt={"use_cached_services": False},
+    ) as client:
         answer = asyncio.get_running_loop().create_future()
 
         def notified(_handle, data: bytearray) -> None:
@@ -31,6 +36,11 @@ async def main(command: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("command", nargs="?", default="DOSE 0.8 5 0.1")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="STOP",
+        help="commande ASCII ; STOP par défaut afin de ne provoquer aucun mouvement",
+    )
     asyncio.run(main(parser.parse_args().command))

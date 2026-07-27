@@ -33,13 +33,3 @@ endif()
 pico_enable_stdio_usb(paste_dispenser 1)
 pico_enable_stdio_uart(paste_dispenser 0)
 pico_add_extra_outputs(paste_dispenser)
-
-option(BUILD_HOST_TESTS "Build host unit tests" OFF)
-if(BUILD_HOST_TESTS)
-  enable_testing()
-  add_executable(unit_tests tests/test_main.c src/app_state.c src/motor_control.c
-    src/command_api.c src/safety.c src/stallguard_calibration.c src/ws_crypto.c src/wifi_uart_command.c src/tmc_current.c)
-  target_compile_definitions(unit_tests PRIVATE UNIT_TEST=1)
-  target_include_directories(unit_tests PRIVATE include)
-  add_test(NAME unit_tests COMMAND unit_tests)
-endif()

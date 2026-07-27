@@ -5,7 +5,6 @@
 #include "command_api.h"
 bool ble_service_init(void);
 bool ble_service_take_command(machine_command_t *command);
-void ble_service_publish(const char *json);
 bool ble_service_connected(void);
 bool ble_service_operational(void);
 uint8_t ble_service_advertising_status(void);

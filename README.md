@@ -41,6 +41,8 @@ Exemple Python :
 
 ```powershell
 python -m pip install -r example/requirements.txt
+python example/nus_serial_example.py
+# Mouvement explicite seulement après vérification de la mécanique :
 python example/nus_serial_example.py "DOSE 0.8 5 0.1"
 ```
 
@@ -84,7 +86,14 @@ cmake --build build --parallel
 ```
 
 Le firmware produit est `build/paste_dispenser.uf2`. Le script `flash_firmware.bat`
-copie ce fichier sur une carte placée en mode BOOTSEL.
+demande automatiquement le mode BOOTSEL par USB puis copie le firmware. Fermer tout
+terminal série avant de lancer la mise à jour.
+
+Tests unitaires sur le poste de développement :
+
+```powershell
+python tests/run_host_tests.py
+```
 
 ## Matériel et unités
 

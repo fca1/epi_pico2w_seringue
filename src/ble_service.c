@@ -1,6 +1,5 @@
 #include "ble_service.h"
 #include "btstack.h"
-#include "pico/async_context.h"
 #include "pico/cyw43_arch.h"
 #include "pico/unique_id.h"
 #include "paste_dispenser.h"
@@ -34,7 +33,6 @@ static void packet_handler(uint8_t type,uint16_t channel,uint8_t*packet,uint16_t
  case HCI_EVENT_DISCONNECTION_COMPLETE:connection=HCI_CON_HANDLE_INVALID;uart_rx_len=0;uart_notify_pending=false;pending=(machine_command_t){CMD_STOP};has_command=true;gap_advertisements_enable(1);break;default:break;}}
 bool ble_service_init(void){if(cyw43_arch_init())return false;pico_unique_board_id_t id;pico_get_unique_board_id(&id);for(unsigned i=0;i<6;i++)static_random_address[i]=id.id[i+2];static_random_address[0]|=0xc0;static_random_address[5]^=0x01;/* NUS-only profile identity */l2cap_init();sm_init();gap_random_address_set(static_random_address);att_server_init(profile_data,read_cb,write_cb);hci_event_callback.callback=&packet_handler;hci_add_event_handler(&hci_event_callback);att_server_register_packet_handler(packet_handler);hci_power_control(HCI_POWER_ON);return true;}
 bool ble_service_take_command(machine_command_t*out){if(!has_command)return false;*out=pending;has_command=false;return true;}
-void ble_service_publish(const char*json){(void)json;}
 bool ble_service_connected(void){return connection!=HCI_CON_HANDLE_INVALID;}
 bool ble_service_operational(void){return operational;}
 uint8_t ble_service_advertising_status(void){return adv_params_status?adv_params_status:adv_enable_status;}

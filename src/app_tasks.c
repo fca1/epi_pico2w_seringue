@@ -166,7 +166,7 @@ static void telemetry_task(void *arg){
  (void)arg;char json[TELEMETRY_SIZE];telemetry_snapshot_t s;
  for(;;){taskENTER_CRITICAL();s=telemetry_snapshot;taskEXIT_CRITICAL();format_telemetry(json,sizeof(json),&s);puts(json);
 #if DISPENSER_HAS_RADIO
-  if(radio_ready){ble_service_publish(json);wifi_manager_publish(json);}
+  if(radio_ready)wifi_manager_publish(json);
 #endif
   vTaskDelay(pdMS_TO_TICKS(STATUS_PERIOD_MS));
  }
