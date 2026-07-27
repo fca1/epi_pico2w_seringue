@@ -60,11 +60,13 @@ SET position_max_mm 120
 DOSE 0.8 5 0.1
 UNLOAD 3
 RESET
+BOOTSEL
 ```
 
 ## Wi-Fi
 
-Après provisionnement réussi, les identifiants sont sauvegardés et réutilisés au démarrage.
+Après provisionnement réussi, les identifiants sont sauvegardés. La connexion est déclenchée
+explicitement par NUS afin de toujours conserver un lien BLE disponible au démarrage.
 La Pico expose :
 
 - `http://dispenser.local/` ;

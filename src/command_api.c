@@ -27,7 +27,7 @@ bool command_parse_json(const char*j,size_t len,machine_command_t*o){if(!j||!o||
 bool command_parse_ascii(const char*line,size_t len,machine_command_t*out){if(!line||!out||!len||len>159)return false;char b[160];memcpy(b,line,len);b[len]=0;for(size_t i=0;i<len;i++)b[i]=(char)toupper((unsigned char)b[i]);*out=(machine_command_t){0};
  char*save=NULL;char*cmd=strtok_r(b," \t",&save);if(!cmd)return false;
  if(!strcmp(cmd,"PUSH"))out->kind=CMD_PUSH_START;else if(!strcmp(cmd,"PULL"))out->kind=CMD_PULL_START;else if(!strcmp(cmd,"STOP"))out->kind=CMD_STOP;
- else if(!strcmp(cmd,"ZERO"))out->kind=CMD_SET_ZERO;else if(!strcmp(cmd,"RESET"))out->kind=CMD_REBOOT;else if(!strcmp(cmd,"FAULTRESET"))out->kind=CMD_RESET;
+ else if(!strcmp(cmd,"ZERO"))out->kind=CMD_SET_ZERO;else if(!strcmp(cmd,"RESET"))out->kind=CMD_REBOOT;else if(!strcmp(cmd,"BOOTSEL"))out->kind=CMD_BOOTSEL;else if(!strcmp(cmd,"FAULTRESET"))out->kind=CMD_RESET;
  else if(!strcmp(cmd,"FLUSH"))out->kind=CMD_FLUSH_STATISTICS;else if(!strcmp(cmd,"DOSE")){out->kind=CMD_DOSE;char*v=strtok_r(NULL," \t",&save);if(!v)return false;out->distance_mm=strtof(v,NULL);v=strtok_r(NULL," \t",&save);if(v)out->speed_mm_s=strtof(v,NULL);v=strtok_r(NULL," \t",&save);out->retract_mm=v?strtof(v,NULL):-1.0f;}
  else if(!strcmp(cmd,"MOVE")){out->kind=CMD_MOVE_RELATIVE;char*v=strtok_r(NULL," \t",&save);if(!v)return false;out->distance_mm=strtof(v,NULL);v=strtok_r(NULL," \t",&save);if(v)out->speed_mm_s=strtof(v,NULL);}
  else if(!strcmp(cmd,"UNLOAD")){out->kind=CMD_UNLOAD_SYRINGE;char*v=strtok_r(NULL," \t",&save);if(v)out->speed_mm_s=strtof(v,NULL);}

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
 project(pico2_seringue C CXX ASM)
-option(DISPENSER_WIFI_AUTOCONNECT "Automatically reconnect to saved Wi-Fi at boot" ON)
+option(DISPENSER_WIFI_AUTOCONNECT "Automatically reconnect to saved Wi-Fi at boot" OFF)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()

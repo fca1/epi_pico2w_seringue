@@ -20,6 +20,8 @@ static char ip[20],telemetry[448]="{\"state\":\"BOOT\"}",scan_json[2][900]={{"{\
 static network_t networks[MAX_NETWORKS];static volatile uint8_t network_count;
 static queue_t commands;static struct tcp_pcb *ws_client;static uint8_t ws_rx[1024];static size_t ws_rx_len;
 static bool mdns_initialized,mdns_registered;
+static uint32_t connect_started_ms;
+static uint32_t autoconnect_due_ms;
 
 static const char page[]=
 "<!doctype html><html lang=fr><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
@@ -69,13 +71,21 @@ static int scan_result(void*env,const cyw43_ev_scan_result_t*r){(void)env;if(!r|
 static void set_scan_json(const char*text){uint8_t next=scan_json_active^1u;snprintf(scan_json[next],sizeof(scan_json[next]),"%s",text);scan_json_active=next;}
 static void format_scan_results(void){for(uint8_t i=0;i<network_count;i++)for(uint8_t j=i+1;j<network_count;j++)if(networks[j].rssi>networks[i].rssi){network_t t=networks[i];networks[i]=networks[j];networks[j]=t;}uint8_t next=scan_json_active^1u;char*out=scan_json[next];size_t used=snprintf(out,sizeof(scan_json[next]),"{\"scanning\":false,\"networks\":[");for(uint8_t i=0;i<network_count&&used<sizeof(scan_json[next])-64;i++){char escaped[67];size_t e=0;for(size_t j=0;networks[i].ssid[j]&&e<sizeof(escaped)-2;j++){char c=networks[i].ssid[j];if(c=='\"'||c=='\\')escaped[e++]='\\';if((unsigned char)c>=32)escaped[e++]=c;}escaped[e]=0;used+=snprintf(out+used,sizeof(scan_json[next])-used,"%s{\"ssid\":\"%s\",\"rssi\":%d,\"secure\":%s}",i?",":"",escaped,networks[i].rssi,networks[i].auth?"true":"false");}snprintf(out+used,sizeof(scan_json[next])-used,"]}");scan_json_active=next;}
 
+static void connection_succeeded(void){state=WIFI_CONNECTED;provisioning_until_ms=0;snprintf(ip,sizeof(ip),"%s",ip4addr_ntoa(netif_ip4_addr(netif_default)));device_config_t saved;config_store_load(&saved);snprintf(saved.wifi_ssid,sizeof(saved.wifi_ssid),"%s",cfg.wifi_ssid);snprintf(saved.wifi_password,sizeof(saved.wifi_password),"%s",cfg.wifi_password);config_store_save(&saved);cfg=saved;server_start();mdns_start();}
+
 static void network_task(void*arg){(void)arg;while(true){if(scan_requested&&!scan_running){scan_requested=false;scan_running=true;network_count=0;set_scan_json("{\"scanning\":true,\"networks\":[]}");cyw43_arch_enable_sta_mode();cyw43_wifi_scan_options_t opts={0};if(cyw43_wifi_scan(&cyw43_state,&opts,NULL,scan_result)){scan_running=false;format_scan_results();}}
+ if(autoconnect_due_ms&&(int32_t)(to_ms_since_boot(get_absolute_time())-autoconnect_due_ms)>=0){autoconnect_due_ms=0;connect_requested=true;}
  if(scan_running&&!cyw43_wifi_scan_active(&cyw43_state)){scan_running=false;format_scan_results();}
- if(connect_requested&&!scan_running){connect_requested=false;state=WIFI_CONNECTING;cyw43_arch_enable_sta_mode();int rc=cyw43_arch_wifi_connect_timeout_ms(cfg.wifi_ssid,cfg.wifi_password,CYW43_AUTH_WPA2_AES_PSK,20000);if(rc==0){state=WIFI_CONNECTED;provisioning_until_ms=0;snprintf(ip,sizeof(ip),"%s",ip4addr_ntoa(netif_ip4_addr(netif_default)));device_config_t saved;config_store_load(&saved);snprintf(saved.wifi_ssid,sizeof(saved.wifi_ssid),"%s",cfg.wifi_ssid);snprintf(saved.wifi_password,sizeof(saved.wifi_password),"%s",cfg.wifi_password);config_store_save(&saved);cfg=saved;server_start();mdns_start();}else state=rc==PICO_ERROR_TIMEOUT?WIFI_TIMEOUT:WIFI_AUTH_FAILED;}vTaskDelay(pdMS_TO_TICKS(25));}}
+ if(connect_requested&&!scan_running){connect_requested=false;state=WIFI_CONNECTING;cyw43_arch_enable_sta_mode();int rc=cyw43_arch_wifi_connect_async(cfg.wifi_ssid,cfg.wifi_password,CYW43_AUTH_WPA2_AES_PSK);if(rc){state=WIFI_AUTH_FAILED;}else connect_started_ms=to_ms_since_boot(get_absolute_time());}
+ if(state==WIFI_CONNECTING){int link=cyw43_wifi_link_status(&cyw43_state,CYW43_ITF_STA);if(link==CYW43_LINK_JOIN)connection_succeeded();else if(link==CYW43_LINK_BADAUTH)state=WIFI_AUTH_FAILED;else if(link==CYW43_LINK_NONET)state=WIFI_NOT_FOUND;else if(link==CYW43_LINK_FAIL)state=WIFI_AUTH_FAILED;else if(to_ms_since_boot(get_absolute_time())-connect_started_ms>=20000)state=WIFI_TIMEOUT;}
+ vTaskDelay(pdMS_TO_TICKS(25));}}
 
 void wifi_manager_init(const device_config_t*c){cfg=*c;queue_init(&commands,sizeof(machine_command_t),4);state=WIFI_IDLE;if(!cfg.wifi_ssid[0])wifi_manager_open_provisioning(300000);configASSERT(xTaskCreate(network_task,"wifi",2048,NULL,3,NULL)==pdPASS);
 #if DISPENSER_WIFI_AUTOCONNECT
- if(cfg.wifi_ssid[0])connect_requested=true;
+ /* Starting a Wi-Fi join while the BT controller is still entering the
+    WORKING state can leave ATT discovery unanswered. Give BLE five seconds
+    to finish initialization before reconnecting saved Wi-Fi credentials. */
+ if(cfg.wifi_ssid[0])autoconnect_due_ms=to_ms_since_boot(get_absolute_time())+5000;
 #endif
 }
 void wifi_manager_open_provisioning(uint32_t duration_ms){provisioning_until_ms=to_ms_since_boot(get_absolute_time())+duration_ms;}

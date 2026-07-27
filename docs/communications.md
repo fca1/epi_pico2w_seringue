@@ -182,6 +182,15 @@ rechargés au démarrage.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
+### `BOOTSEL`
+
+Envoi USB uniquement : `BOOTSEL`
+
+Arrête le moteur et redémarre directement en mode de téléchargement USB. Le script
+`flash_firmware.bat` utilise cette commande : aucun bouton de la carte n'est nécessaire.
+
+<div style="break-after: page; page-break-after: always;"></div>
+
 ### `SGCAL START`
 
 Envoi : `SGCAL START`
@@ -242,6 +251,7 @@ pendant le démarrage. Les identifiants sont persistés uniquement après connex
 
 Les ordres ASCII de mouvement acceptés sur RX sont les mêmes que sur l’USB série : `PUSH`, `PULL`,
 `STOP`, `DOSE`, `MOVE`, `UNLOAD`, `ZERO`, `FAULTRESET`, `RESET`, `FLUSH`, `SET` et `SGCAL`.
+`BOOTSEL` est volontairement réservé à l'USB local.
 La réponse est transmise sur TX (`OK`, `ERR COMMAND` ou `ERR BUSY`).
 
 <div style="break-after: page; page-break-after: always;"></div>
