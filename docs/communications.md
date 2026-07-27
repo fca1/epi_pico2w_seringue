@@ -240,142 +240,9 @@ SSID de 1 à 32 octets et un mot de passe de 0 à 64 octets.
 La fenêtre de provisionnement doit être ouverte au premier démarrage ou en maintenant PULL
 pendant le démarrage. Les identifiants sont persistés uniquement après connexion réussie.
 
-<div style="break-after: page; page-break-after: always;"></div>
-
-Nom annoncé : `PasteDispenser-Pico2W`. Service principal :
-`7e400001-b5a3-f393-e0a9-e50e24dcca9e`. Les commandes machine sont écrites en JSON UTF-8
-sur `7e400002-b5a3-f393-e0a9-e50e24dcca9e`. L’état se lit ou se reçoit par notifications
-sur `7e400003-b5a3-f393-e0a9-e50e24dcca9e`.
-
-### `push_start`
-
-Envoi : `{"command":"push_start"}`. Démarre la poussée manuelle.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `push_stop`
-
-Envoi : `{"command":"push_stop"}`. Arrête la poussée manuelle.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `pull_start`
-
-Envoi : `{"command":"pull_start"}`. Démarre la traction manuelle.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `pull_stop`
-
-Envoi : `{"command":"pull_stop"}`. Arrête la traction manuelle.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `stop`
-
-Envoi : `{"command":"stop"}`. Arrêt général prioritaire. Une déconnexion BLE injecte
-également cet arrêt localement.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `dose`
-
-Envoi : `{"command":"dose","distance_mm":0.8,"speed_mm_s":4,"retract_mm":0.1}`.
-Demande une fourniture contrôlée suivie du recul anti-goutte.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `move_relative`
-
-Envoi : `{"command":"move_relative","distance_mm":-2,"speed_mm_s":3}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `unload_syringe`
-
-Envoi : `{"command":"unload_syringe","speed_mm_s":3}`. Surveiller `state=HOMING` et
-`unload_result` dans les notifications.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `set_zero`
-
-Envoi : `{"command":"set_zero"}`. Définit la position courante comme zéro.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `reset`
-
-Envoi : `{"command":"reset"}`. Acquitte un défaut sans redémarrage.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `reboot`
-
-Envoi : `{"command":"reboot"}`. Arrête le moteur puis redémarre le contrôleur.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `set_trigger_dose`
-
-Envoi : `{"command":"set_trigger_dose","distance_mm":0.8}`. Sauvegarde la course de
-l’entrée physique DOSE.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `set_config`
-
-Envoi : `{"command":"set_config","parameter":"dosing_speed_mm_s","value":4}`.
-La liste des paramètres est identique à celle de la commande série `SET`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `flush_statistics`
-
-Envoi : `{"command":"flush_statistics"}`. Remet et sauvegarde le compteur d’activations.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `sg_calibrate_start`
-
-Envoi : `{"command":"sg_calibrate_start"}`. Démarre l’acquisition StallGuard.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `sg_calibrate_finish`
-
-Envoi : `{"command":"sg_calibrate_finish"}`. Calcule et sauvegarde les seuils.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `sg_calibrate_cancel`
-
-Envoi : `{"command":"sg_calibrate_cancel"}`. Annule la calibration.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### Lire l’état BLE
-
-Lire `0003` puis activer ses notifications. Exemple :
-
-```json
-{"state":"READY","position_mm":12.450,"remaining_course_mm":107.550,"used_course_mm":12.450,"activation_count":42,"unload_result":"none","sg_result":380,"load":0,"sg_calibrating":false,"sg_samples":0,"trigger_dose_mm":0.800,"radio_available":true,"radio_ready":true,"ble_operational":true,"ble_adv_status":0,"fault":0}
-```
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### Scanner les SSID par BLE
-
-Écrire un octet quelconque sur la caractéristique `0009`, puis lire `000a` jusqu’à
-`"scanning":false`. Le scan reste disponible hors de la fenêtre de provisionnement.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### Configurer le Wi-Fi par BLE
-
-Écrire le SSID sur `0004`, le mot de passe sur `0005`, puis un octet sur `0006`. Ces
-écritures sont limitées à la fenêtre de provisionnement. Lire l’état Wi-Fi sur `0007` et
-l’adresse IP sur `0008`. Les identifiants ne sont sauvegardés qu’après connexion réussie.
+Les ordres ASCII de mouvement acceptés sur RX sont les mêmes que sur l’USB série : `PUSH`, `PULL`,
+`STOP`, `DOSE`, `MOVE`, `UNLOAD`, `ZERO`, `FAULTRESET`, `RESET`, `FLUSH`, `SET` et `SGCAL`.
+La réponse est transmise sur TX (`OK`, `ERR COMMAND` ou `ERR BUSY`).
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -395,8 +262,7 @@ hôtes prenant en charge mDNS.
 Pour WebSocket, envoyer directement l’objet JSON sous forme de trame texte. Pour HTTP,
 placer le même objet dans le corps de la requête POST avec `Content-Type: application/json`.
 
-L’exemple complet `example/ble_wifi_dispenser_example.py` provisionne `EPI` par BLE,
-ferme BLE, puis applique une configuration et une dose par l’API HTTP Wi-Fi.
+L’exemple `example/nus_serial_example.py` montre l’échange de commandes ASCII par NUS.
 
 ### État Wi-Fi : `GET /api/status`
 

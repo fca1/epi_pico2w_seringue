@@ -1,5 +1,0 @@
-:root{font-family:system-ui;color-scheme:dark;background:#12161d;color:#eef2f7}
-main{max-width:42rem;margin:auto;padding:2rem}section{background:#1d2530;padding:1rem;margin:1rem 0;border-radius:.75rem}
-button,input,select{font:inherit;padding:.7rem;margin:.3rem;border-radius:.4rem;border:1px solid #526074}
-button{background:#1976d2;color:white;cursor:pointer}#stop{background:#b3261e}.row{display:flex;flex-wrap:wrap}
-label{display:block;margin:.5rem 0}input{float:right;width:8rem}pre{white-space:pre-wrap}
