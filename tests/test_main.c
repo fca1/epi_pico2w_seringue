@@ -9,6 +9,7 @@
 #include "stallguard_calibration.h"
 #include "ws_crypto.h"
 #include "tmc_current.h"
+#include "wifi_uart_command.h"
 int main(void){
  motor_config_t c={.motor_steps_per_rev=200,.microsteps=16,.motor_run_current_mA=800,.motor_hold_current_mA=300,.screw_pitch_mm=2.0f,.manual_speed_mm_s=5.0f,.a1_mm_s2=100.0f,.amax_mm_s2=100.0f,.dmax_mm_s2=100.0f,.d1_mm_s2=100.0f};
  assert(fabsf(motor_microsteps_per_mm(&c)-1600.0f)<.001f);
@@ -29,6 +30,7 @@ int main(void){
  const char *ascii_set="set motor_run_current_mA 900";assert(command_parse_ascii(ascii_set,strlen(ascii_set),&cmd));assert(cmd.kind==CMD_SET_CONFIG&&cmd.parameter==CFG_RUN_CURRENT_MA&&fabsf(cmd.value-900)<.001f);
  const char *ascii_amax="SET AMAX_MM_S2 250";assert(command_parse_ascii(ascii_amax,strlen(ascii_amax),&cmd));assert(cmd.kind==CMD_SET_CONFIG&&cmd.parameter==CFG_AMAX_MM_S2&&fabsf(cmd.value-250)<.001f);
  const char *ascii_reset="RESET";assert(command_parse_ascii(ascii_reset,strlen(ascii_reset),&cmd)&&cmd.kind==CMD_REBOOT);
+ char uart_ssid[33],uart_password[65];const char*uart_wifi="WIFI:mon_reseau;PASSWORD:mon_mot_de_passe";assert(wifi_uart_parse(uart_wifi,strlen(uart_wifi),uart_ssid,uart_password));assert(!strcmp(uart_ssid,"mon_reseau")&&!strcmp(uart_password,"mon_mot_de_passe"));assert(!wifi_uart_parse("WIFI:bad",8,uart_ssid,uart_password));
  device_config_t d={.manual_timeout_ms=1000,.position_min_mm=0,.position_max_mm=10,.stallguard_filter_count=3,.stallguard_warning_level=100};safety_t s;safety_init(&s);safety_manual_started(&s,10);assert(safety_check(&s,&d,false,true,500,200,true,5,1)==SAFETY_OK);assert(safety_check(&s,&d,false,true,1011,200,true,5,1)==SAFETY_TIMEOUT);
  sg_calibration_t cal;uint16_t baseline,warning,critical;sg_calibration_start(&cal);for(int i=0;i<120;i++)sg_calibration_add(&cal,400+(i%5));assert(sg_calibration_finish(&cal,&baseline,&warning,&critical));assert(baseline==402&&warning==281&&critical==201);
  char accept[29];assert(ws_crypto_accept("dGhlIHNhbXBsZSBub25jZQ==",24,accept));assert(!strcmp(accept,"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));

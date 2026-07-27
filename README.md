@@ -159,7 +159,7 @@ la casse et se terminent par CR/LF ou LF.
 | Commande | Fonction |
 |---|---|
 | `HELP` | affiche toutes les commandes et la version logicielle |
-| `VERSION` | affiche `PasteDispenser 1.2.0` |
+| `VERSION` | affiche la version courante, par exemple `PasteDispenser 1.4.0` |
 | `STATUS` | retourne immédiatement l’état JSON complet |
 | `CONFIG` | affiche tous les paramètres persistants |
 | `PUSH`, `PULL`, `STOP` | mouvement manuel et arrêt prioritaire |
@@ -177,7 +177,7 @@ Exemple de session :
 
 ```text
 VERSION
-PasteDispenser 1.2.0
+PasteDispenser 1.4.0
 OK
 SET dosing_speed_mm_s 4
 OK QUEUED
@@ -215,7 +215,20 @@ UTF-8. La page Web Bluetooth doit être servie en HTTPS ou depuis `localhost`.
 
 ### Service et caractéristiques
 
-Le service principal est `7e400001-b5a3-f393-e0a9-e50e24dcca9e`.
+Le service principal est `7e400001-b5a3-f393-e0a9-e50e24dcca9e`. La carte expose aussi
+le Nordic UART Service `6e400001-b5a3-f393-e0a9-e50e24dcca9e`, annoncé dans les paquets
+BLE, pour un provisionnement Wi-Fi en ASCII.
+
+Écrire sur la caractéristique RX NUS `6e400002-b5a3-f393-e0a9-e50e24dcca9e` :
+
+```text
+WIFI:mon_reseau;PASSWORD:mon_mot_de_passe
+```
+
+La caractéristique TX NUS `6e400003-b5a3-f393-e0a9-e50e24dcca9e` répond par notification,
+par exemple `OK WIFI CONNECTING`. Pour une commande fragmentée en plusieurs écritures BLE,
+terminer la dernière par un retour à la ligne. Comme les autres écritures d’identifiants, cette
+commande exige que la fenêtre de provisionnement soit ouverte.
 
 La Pico utilise une adresse BLE statique aléatoire dérivée de son identifiant matériel.
 Elle reste donc stable pour une carte donnée, distingue plusieurs pousse-seringues et évite

@@ -16,6 +16,7 @@ import time
 from bleak import BleakClient, BleakScanner
 
 SERVICE = "7e400001-b5a3-f393-e0a9-e50e24dcca9e"
+NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 WIFI_SSID = "7e400004-b5a3-f393-e0a9-e50e24dcca9e"
 WIFI_PASSWORD = "7e400005-b5a3-f393-e0a9-e50e24dcca9e"
 WIFI_CONNECT = "7e400006-b5a3-f393-e0a9-e50e24dcca9e"
@@ -37,7 +38,7 @@ async def discover(timeout: float):
     devices = await BleakScanner.discover(timeout=timeout, return_adv=True)
     for device, advertisement in devices.values():
         name = device.name or advertisement.local_name or ""
-        if name.startswith("PasteDispenser-") and SERVICE in advertisement.service_uuids:
+        if name.startswith("PasteDispenser-") and NUS_SERVICE in advertisement.service_uuids:
             print(f"Found {name} ({device.address}, {advertisement.rssi} dBm)")
             return device
     raise RuntimeError("PasteDispenser not found")

@@ -18,7 +18,7 @@ async function connectDevice(selectedDevice){
  show('Connectée');
 }
 document.querySelector('#connect').onclick=async()=>{
- try{await connectDevice(await navigator.bluetooth.requestDevice({filters:[{namePrefix:'PasteDispenser-',services:[SERVICE]}]}));}
+ try{await connectDevice(await navigator.bluetooth.requestDevice({filters:[{namePrefix:'PasteDispenser-'}],optionalServices:[SERVICE,'6e400001-b5a3-f393-e0a9-e50e24dcca9e']}));}
  catch(e){show(e.message);}
 };
 if(navigator.bluetooth.getDevices)navigator.bluetooth.getDevices().then(devices=>{

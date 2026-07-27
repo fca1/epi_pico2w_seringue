@@ -37,7 +37,7 @@ puis `OK`.
 
 Envoi : `VERSION`
 
-Retour : `PasteDispenser 1.2.0`, puis `OK`.
+Retour : la version courante, par exemple `PasteDispenser 1.4.0`, puis `OK`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -216,6 +216,31 @@ Remet `activation_count` à zéro et sauvegarde immédiatement la statistique.
 <div style="break-after: page; page-break-after: always;"></div>
 
 ## 2. Bluetooth Low Energy
+
+### UART BLE — Nordic UART Service
+
+Le service NUS standard utilise les UUID suivants :
+
+- service : `6e400001-b5a3-f393-e0a9-e50e24dcca9e` ;
+- RX, écriture client vers seringue : `6e400002-b5a3-f393-e0a9-e50e24dcca9e` ;
+- TX, notification seringue vers client : `6e400003-b5a3-f393-e0a9-e50e24dcca9e`.
+
+Commande de provisionnement :
+
+```text
+WIFI:mon_reseau;PASSWORD:mon_mot_de_passe
+```
+
+Réponses possibles sur TX : `OK WIFI CONNECTING`, `ERR FORMAT`, `ERR TOO_LONG`,
+`ERR WIFI_REQUEST` ou `ERR PROVISIONING_CLOSED`. Activer les notifications TX avant
+l’écriture RX. Une commande tenant dans une seule écriture ne nécessite pas de terminaison ;
+si l’application la fragmente, ajouter `\n` à la fin. La limite est de 111 octets, avec un
+SSID de 1 à 32 octets et un mot de passe de 0 à 64 octets.
+
+La fenêtre de provisionnement doit être ouverte au premier démarrage ou en maintenant PULL
+pendant le démarrage. Les identifiants sont persistés uniquement après connexion réussie.
+
+<div style="break-after: page; page-break-after: always;"></div>
 
 Nom annoncé : `PasteDispenser-Pico2W`. Service principal :
 `7e400001-b5a3-f393-e0a9-e50e24dcca9e`. Les commandes machine sont écrites en JSON UTF-8

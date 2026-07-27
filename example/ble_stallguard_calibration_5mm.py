@@ -12,6 +12,7 @@ import json
 from bleak import BleakClient, BleakScanner
 
 SERVICE = "7e400001-b5a3-f393-e0a9-e50e24dcca9e"
+NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 COMMAND = "7e400002-b5a3-f393-e0a9-e50e24dcca9e"
 STATUS = "7e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
@@ -24,7 +25,7 @@ async def discover(timeout: float = 8.0):
     devices = await BleakScanner.discover(timeout=timeout, return_adv=True)
     for device, advertisement in devices.values():
         name = device.name or advertisement.local_name or ""
-        if name.startswith("PasteDispenser-") and SERVICE in advertisement.service_uuids:
+        if name.startswith("PasteDispenser-") and NUS_SERVICE in advertisement.service_uuids:
             print(f"Dispenser found: {name} ({device.address})")
             return device
     raise RuntimeError("PasteDispenser not found over BLE")

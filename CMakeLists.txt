@@ -10,7 +10,7 @@ include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_i
 
 set(DISPENSER_SOURCES src/main.c src/app_tasks.c src/app_state.c src/buttons.c src/motor_control.c
   src/tmc5130.c src/tmc_current.c src/config_store.c src/statistics.c src/safety.c src/command_api.c
-  src/stallguard_calibration.c src/ws_crypto.c src/status_led.c)
+  src/stallguard_calibration.c src/ws_crypto.c src/wifi_uart_command.c src/status_led.c)
 if(PICO_BOARD STREQUAL "pico2_w")
   list(APPEND DISPENSER_SOURCES src/ble_service.c src/wifi_manager.c)
   set(DISPENSER_HAS_RADIO 1)
@@ -38,7 +38,7 @@ option(BUILD_HOST_TESTS "Build host unit tests" OFF)
 if(BUILD_HOST_TESTS)
   enable_testing()
   add_executable(unit_tests tests/test_main.c src/app_state.c src/motor_control.c
-    src/command_api.c src/safety.c src/stallguard_calibration.c src/ws_crypto.c src/tmc_current.c)
+    src/command_api.c src/safety.c src/stallguard_calibration.c src/ws_crypto.c src/wifi_uart_command.c src/tmc_current.c)
   target_compile_definitions(unit_tests PRIVATE UNIT_TEST=1)
   target_include_directories(unit_tests PRIVATE include)
   add_test(NAME unit_tests COMMAND unit_tests)
