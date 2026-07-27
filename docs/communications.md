@@ -362,6 +362,11 @@ Le Wi-Fi doit d’abord être configuré par BLE. Après connexion, la Pico expo
 - `GET http://<adresse-ip>/api/status` pour lire l’état ;
 - `POST http://<adresse-ip>/api/command` pour envoyer une commande JSON.
 
+La carte annonce aussi le nom mDNS `dispenser.local` et le service DNS-SD
+`PasteDispenser._http._tcp` sur le port 80. Il est donc possible d’utiliser
+`http://dispenser.local/`, `ws://dispenser.local/ws` et les mêmes chemins d’API sur les
+hôtes prenant en charge mDNS.
+
 Pour WebSocket, envoyer directement l’objet JSON sous forme de trame texte. Pour HTTP,
 placer le même objet dans le corps de la requête POST avec `Content-Type: application/json`.
 

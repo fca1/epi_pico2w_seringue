@@ -26,7 +26,7 @@ target_link_libraries(paste_dispenser pico_stdlib hardware_spi hardware_flash pi
   FreeRTOS-Kernel-Heap4)
 if(DISPENSER_HAS_RADIO)
   target_link_libraries(paste_dispenser pico_btstack_ble pico_btstack_cyw43
-    pico_cyw43_arch_lwip_sys_freertos pico_unique_id)
+    pico_cyw43_arch_lwip_sys_freertos pico_lwip_mdns pico_unique_id)
   pico_btstack_make_gatt_header(paste_dispenser PRIVATE ${CMAKE_CURRENT_LIST_DIR}/src/paste_dispenser.gatt)
   set_source_files_properties(src/wifi_manager.c PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra;-Werror")
 endif()

@@ -41,7 +41,8 @@ formatage JSON et les communications ne retardent pas la boucle de sécurité.
 - Configuration persistante versionnée avec CRC et deux secteurs flash alternés, séparés
   des secteurs réservés par BTstack.
 - Provisionnement Wi-Fi BLE avec scan SSID, liste classée/dédupliquée, saisie du mot de
-  passe, reconnexion au démarrage et serveur HTTP local avec interface embarquée.
+  passe, reconnexion au démarrage et serveur HTTP local avec interface embarquée. Le nom
+  mDNS `dispenser.local` permet l’accès sans connaître l’adresse IPv4.
 - Le provisionnement est ouvert cinq minutes au premier démarrage ou en maintenant PULL
   pendant le démarrage. Maintenir PUSH et PULL cinq secondes efface la configuration puis
   redémarre la carte.
