@@ -74,6 +74,11 @@ La valeur est validée puis sauvegardée en flash. Paramètres : `screw_pitch_mm
 `stallguard_warning_level`, `stallguard_critical_level`, `stallguard_filter_count` et
 `stallguard_enabled`. Les paramètres mécaniques prennent complètement effet après `RESET`.
 
+`motor_run_current_mA` et `motor_hold_current_mA` sont compris entre 200 et 1200 mA RMS.
+Le TMC5130A fonctionne en mesure interne `RDS(on)` (`internal_Rsense=1`), sans shunt
+`Rsense` externe. La carte doit néanmoins comporter `RREF=7,5 kΩ` entre `5VOUT` et
+`AIN/IREF`, avec `BRA` et `BRB` reliées directement à la masse.
+
 Les quatre accélérations constituent le profil trapézoïdal avancé du TMC5130 : `A1` puis
 `AMAX` pendant l’accélération, `DMAX` puis `D1` pendant la décélération. Elles sont données
 en `mm/s²`, sauvegardées en flash et appliquées après redémarrage. Exemple série :

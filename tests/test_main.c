@@ -32,6 +32,6 @@ int main(void){
  device_config_t d={.manual_timeout_ms=1000,.position_min_mm=0,.position_max_mm=10,.stallguard_filter_count=3,.stallguard_warning_level=100};safety_t s;safety_init(&s);safety_manual_started(&s,10);assert(safety_check(&s,&d,false,true,500,200,true,5,1)==SAFETY_OK);assert(safety_check(&s,&d,false,true,1011,200,true,5,1)==SAFETY_TIMEOUT);
  sg_calibration_t cal;uint16_t baseline,warning,critical;sg_calibration_start(&cal);for(int i=0;i<120;i++)sg_calibration_add(&cal,400+(i%5));assert(sg_calibration_finish(&cal,&baseline,&warning,&critical));assert(baseline==402&&warning==281&&critical==201);
  char accept[29];assert(ws_crypto_accept("dGhlIHNhbXBsZSBub25jZQ==",24,accept));assert(!strcmp(accept,"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));
- assert(tmc_current_scale_from_mA(800,0.1f)==12);assert(tmc_current_mA_from_scale(12,0.1f)==778);assert(tmc_current_scale_from_mA(300,0.1f)==4);assert(tmc_current_mA_from_scale(4,0.1f)==299);
+ assert(tmc_internal_full_scale_mA(7500.0f)==1248);assert(tmc_internal_current_scale_from_mA(800,7500.0f)==20);assert(tmc_internal_current_mA_from_scale(20,7500.0f)==819);assert(tmc_internal_current_scale_from_mA(300,7500.0f)==7);assert(tmc_internal_current_mA_from_scale(7,7500.0f)==312);
  puts("All tests passed");
 }

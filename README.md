@@ -346,10 +346,14 @@ est arrêté sans passer en `FAULT` et la position est recalée sur `position_mi
 | `manual_timeout_ms` | 30000 | durée manuelle maximale |
 | `stallguard_enabled` | faux | activé après calibration réussie |
 
-La résistance de mesure du courant du TMC5130A est fixée à `0,1 Ω` dans
-`TMC_SENSE_RESISTOR_OHM`. Les courants sont saisis en mA. Le firmware calcule les valeurs
-`IRUN` et `IHOLD` avec une tension pleine échelle de 325 mV. Avec 800 mA demandés, le pas
-de réglage le plus proche donne environ 778 mA RMS.
+Le TMC5130A utilise désormais sa mesure interne par `RDS(on)` : aucune résistance de shunt
+`Rsense` externe n’est utilisée. Le firmware positionne `internal_Rsense` dans `GCONF` avant
+d’activer les ponts. Les broches `BRA` et `BRB` doivent être reliées directement à la masse.
+
+Une résistance de référence `RREF = 7,5 kΩ` entre `5VOUT` et `AIN/IREF` reste nécessaire ;
+elle fixe la référence de courant mais ne mesure pas le courant moteur. La plage configurée
+est de 200 à 1200 mA RMS. Les valeurs demandées sont converties en `IRUN` et `IHOLD` ; par
+exemple 800 mA donne `IRUN=20`, soit environ 819 mA RMS.
 
 Les distances sont exprimées en mm, les vitesses linéaires en mm/s, les accélérations en
 mm/s² et les courants en mA. La vitesse moteur équivalente en tours par seconde est :
