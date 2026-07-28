@@ -1,9 +1,9 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-#define DEVICE_CONFIG_VERSION 5u
+#define DEVICE_CONFIG_VERSION 6u
 typedef struct {
- uint32_t version,sequence; char wifi_ssid[33],wifi_password[65];
+ uint32_t version,sequence;
  float screw_pitch_mm; uint16_t motor_steps_per_rev,microsteps;
  uint16_t motor_run_current_mA,motor_hold_current_mA;
  float manual_speed_mm_s,dosing_speed_mm_s,trigger_dose_mm;

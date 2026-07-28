@@ -1,35 +1,23 @@
 # Communications et commandes
 
-Ce document décrit les trois moyens de communication du pousse-seringue : USB série,
-Bluetooth Low Energy et Wi-Fi. Toutes les distances sont en mm, les vitesses en mm/s,
-les accélérations en mm/s² et les courants en mA.
+Le pousse-seringue possède uniquement deux interfaces : USB série et Bluetooth Low Energy
+Nordic UART Service (NUS). Toutes les distances sont en mm, les vitesses en mm/s, les
+accélérations en mm/s² et les courants en mA.
 
-## Vue d’ensemble
-
-| Liaison | Disponibilité | Format | Usage principal |
-|---|---|---|---|
-| USB série | Pico 2 et Pico 2 W | commandes ASCII ou JSON, une ligne par ordre | mise au point, configuration locale et maintenance |
-| BLE | Pico 2 W | commandes ASCII sur Nordic UART Service (NUS) | commande simple depuis mobile ou outil Python proche de la machine |
-| Wi-Fi | Pico 2 W après provisionnement BLE | formulaire HTTP et API JSON | configuration persistante ; commandes réservées aux tests |
-
-Les trois interfaces alimentent la même file FreeRTOS. Les mêmes règles de sécurité
-s’appliquent : un mouvement n’est accepté que dans `READY`, `STOP` est prioritaire et un
-défaut doit être acquitté avant un nouveau mouvement. La télémétrie JSON a la même forme
-sur les trois liaisons.
+Les deux interfaces utilisent les mêmes commandes ASCII et la même file FreeRTOS. Terminer
+chaque commande par LF (`\n`) ou CR/LF. Une commande mise en file répond `OK QUEUED` ; une
+lecture répond par son contenu puis `OK`.
 
 ## 1. USB série
 
-Port USB CDC à 115200 bauds, 8 bits, sans parité, 1 bit d’arrêt. Terminer chaque commande
-par LF (`\n`) ou CR/LF. Les commandes ne sont pas sensibles à la casse. Une commande mise
-en file répond `OK QUEUED`; une lecture locale répond par son contenu puis `OK`; une erreur
-de syntaxe répond `ERR SYNTAX_OR_QUEUE`.
+Port USB CDC à 115200 bauds, 8 bits, sans parité et 1 bit d'arrêt. Les commandes ne sont pas
+sensibles à la casse. Une erreur de syntaxe répond `ERR SYNTAX_OR_QUEUE`.
 
 ### `HELP`
 
 Envoi : `HELP`
 
-Retour : version logicielle, liste complète des commandes, paramètres acceptés par `SET`,
-puis `OK`.
+Retour : version et liste des commandes, puis `OK`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -37,7 +25,7 @@ puis `OK`.
 
 Envoi : `VERSION`
 
-Retour : la version courante, par exemple `PasteDispenser 1.5.0`, puis `OK`.
+Retour : par exemple `PasteDispenser 1.6.0`, puis `OK`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -45,8 +33,9 @@ Retour : la version courante, par exemple `PasteDispenser 1.5.0`, puis `OK`.
 
 Envoi : `STATUS`
 
-Retour : état JSON immédiat, puis `OK`. Les champs principaux sont `state`, `position_mm`,
-`remaining_course_mm`, `activation_count`, `load` et `fault`.
+Retour : télémétrie JSON puis `OK`. Principaux champs : `state`, `position_mm`,
+`remaining_course_mm`, `used_course_mm`, `activation_count`, `sg_result`, `load`,
+`trigger_dose_mm` et `fault`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -54,8 +43,7 @@ Retour : état JSON immédiat, puis `OK`. Les champs principaux sont `state`, `p
 
 Envoi : `CONFIG`
 
-Retour : une ligne contenant tous les paramètres persistants, puis `OK`. Le mot de passe
-Wi-Fi n’est jamais affiché.
+Retour : tous les paramètres persistants puis `OK`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -65,45 +53,17 @@ Envoi : `SET <paramètre> <valeur>`
 
 Exemple : `SET dosing_speed_mm_s 4`
 
-La valeur est validée puis sauvegardée en flash. Paramètres : `screw_pitch_mm`,
-`motor_steps_per_rev`, `microsteps`, `motor_run_current_mA`, `motor_hold_current_mA`,
-`manual_speed_mm_s`, `dosing_speed_mm_s`, `trigger_dose_mm`, `a1_mm_s2`,
-`amax_mm_s2`, `dmax_mm_s2`, `d1_mm_s2`,
-`retract_distance_mm`, `retract_speed_mm_s`, `retract_delay_ms`, `position_min_mm`,
-`position_max_mm`, `manual_timeout_ms`, `stallguard_threshold`,
+Paramètres : `screw_pitch_mm`, `motor_steps_per_rev`, `microsteps`,
+`motor_run_current_mA`, `motor_hold_current_mA`, `manual_speed_mm_s`,
+`dosing_speed_mm_s`, `trigger_dose_mm`, `a1_mm_s2`, `amax_mm_s2`, `dmax_mm_s2`,
+`d1_mm_s2`, `retract_distance_mm`, `retract_speed_mm_s`, `retract_delay_ms`,
+`position_min_mm`, `position_max_mm`, `manual_timeout_ms`, `stallguard_threshold`,
 `stallguard_warning_level`, `stallguard_critical_level`, `stallguard_filter_count` et
-`stallguard_enabled`. Les paramètres mécaniques prennent complètement effet après `RESET`.
+`stallguard_enabled`.
 
-`motor_run_current_mA` et `motor_hold_current_mA` sont compris entre 200 et 1200 mA RMS.
-Le TMC5130A fonctionne en mesure interne `RDS(on)` (`internal_Rsense=1`), sans shunt
-`Rsense` externe. La carte doit néanmoins comporter `RREF=7,5 kΩ` entre `5VOUT` et
-`AIN/IREF`, avec `BRA` et `BRB` reliées directement à la masse.
-
-Les quatre accélérations constituent le profil trapézoïdal avancé du TMC5130 : `A1` puis
-`AMAX` pendant l’accélération, `DMAX` puis `D1` pendant la décélération. Elles sont données
-en `mm/s²`, sauvegardées en flash et appliquées après redémarrage. Exemple série :
-
-```text
-SET a1_mm_s2 80
-SET amax_mm_s2 200
-SET dmax_mm_s2 180
-SET d1_mm_s2 60
-RESET
-```
-
-En BLE NUS, utiliser les mêmes commandes ASCII que sur l'USB. Avec l'API HTTP avancée
-ou le WebSocket, utiliser successivement :
-
-```json
-{"command":"set_config","parameter":"a1_mm_s2","value":80}
-{"command":"set_config","parameter":"amax_mm_s2","value":200}
-{"command":"set_config","parameter":"dmax_mm_s2","value":180}
-{"command":"set_config","parameter":"d1_mm_s2","value":60}
-{"command":"reboot"}
-```
-
-Ces quatre réglages avancés ne sont volontairement pas affichés dans le formulaire HTTP.
-Ils restent accessibles par l'API HTTP avancée, le WebSocket, le BLE NUS et l'USB série.
+Les courants sont compris entre 200 et 1200 mA RMS. Le TMC5130A utilise la mesure interne
+`RDS(on)` avec `RREF=7,5 kΩ`. Les accélérations suivent `A1`, `AMAX`, `DMAX`, puis `D1`.
+Les paramètres du pilote moteur prennent complètement effet après `RESET`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -111,7 +71,7 @@ Ils restent accessibles par l'API HTTP avancée, le WebSocket, le BLE NUS et l'U
 
 Envoi : `PUSH`
 
-Démarre une poussée manuelle à `manual_speed_mm_s`. La maintenir jusqu’à l’envoi de `STOP`.
+Démarre une poussée à `manual_speed_mm_s`. Arrêter avec `STOP`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -119,7 +79,7 @@ Démarre une poussée manuelle à `manual_speed_mm_s`. La maintenir jusqu’à l
 
 Envoi : `PULL`
 
-Démarre une traction manuelle à `manual_speed_mm_s`. La maintenir jusqu’à `STOP`.
+Démarre une traction à `manual_speed_mm_s`. Arrêter avec `STOP`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -127,7 +87,7 @@ Démarre une traction manuelle à `manual_speed_mm_s`. La maintenir jusqu’à `
 
 Envoi : `STOP`
 
-Arrêt prioritaire. La file de commandes en attente est vidée avant l’insertion de l’arrêt.
+Arrête le mouvement et vide les commandes en attente.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -135,9 +95,8 @@ Arrêt prioritaire. La file de commandes en attente est vidée avant l’inserti
 
 Envoi : `DOSE [distance_mm] [vitesse_mm_s] [recul_mm]`
 
-`DOSE` sans argument utilise `trigger_dose_mm`, `dosing_speed_mm_s` et
-`retract_distance_mm`, exactement comme une fermeture du contact GP13. Exemple explicite :
-`DOSE 0.8 4 0.1`. Une fourniture dépassant la course restante est refusée avant le mouvement.
+Sans argument, utilise `trigger_dose_mm`, `dosing_speed_mm_s` et `retract_distance_mm`,
+exactement comme le contact GP13. Une dose supérieure à la course restante est refusée.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -145,7 +104,7 @@ Envoi : `DOSE [distance_mm] [vitesse_mm_s] [recul_mm]`
 
 Envoi : `MOVE <distance_mm_signée> [vitesse_mm_s]`
 
-Exemple : `MOVE -2 3`. Une valeur positive pousse; une valeur négative tire.
+Une valeur positive pousse ; une valeur négative tire.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -154,7 +113,7 @@ Exemple : `MOVE -2 3`. Une valeur positive pousse; une valeur négative tire.
 Envoi : `UNLOAD [vitesse_mm_s]`
 
 Revient vers `position_min_mm`. Avec StallGuard calibré, un blocage est traité comme la
-butée de début de course et permet le démontage de la seringue.
+butée de début de course.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -162,7 +121,7 @@ butée de début de course et permet le démontage de la seringue.
 
 Envoi : `ZERO`
 
-Définit la position courante du moteur comme zéro. À utiliser machine immobile.
+Définit la position courante comme zéro.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -170,8 +129,7 @@ Définit la position courante du moteur comme zéro. À utiliser machine immobil
 
 Envoi : `FAULTRESET`
 
-Acquitte l’état `FAULT` sans redémarrer. Si la cause matérielle subsiste, le défaut sera
-détecté de nouveau.
+Acquitte un défaut. Si la cause subsiste, il sera détecté de nouveau.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -179,8 +137,7 @@ détecté de nouveau.
 
 Envoi : `RESET`
 
-Arrête le moteur puis redémarre le RP2350 par watchdog. Les paramètres persistants sont
-rechargés au démarrage.
+Arrête le moteur puis redémarre le RP2350.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -188,8 +145,8 @@ rechargés au démarrage.
 
 Envoi USB uniquement : `BOOTSEL`
 
-Arrête le moteur et redémarre directement en mode de téléchargement USB. Le script
-`flash_firmware.bat` utilise cette commande : aucun bouton de la carte n'est nécessaire.
+Redémarre en mode de téléchargement USB. `flash_firmware.bat` automatise ensuite la copie
+du firmware.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -197,8 +154,8 @@ Arrête le moteur et redémarre directement en mode de téléchargement USB. Le 
 
 Envoi : `SGCAL START`
 
-Démarre l’acquisition StallGuard. Effectuer ensuite un mouvement manuel stable sur une
-zone mécanique normale pendant au moins 100 échantillons.
+Démarre l'acquisition StallGuard. Effectuer un mouvement manuel stable pendant au moins
+100 échantillons.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -206,7 +163,7 @@ zone mécanique normale pendant au moins 100 échantillons.
 
 Envoi : `SGCAL FINISH`
 
-Calcule et sauvegarde la référence, le seuil d’avertissement et le seuil critique.
+Calcule et sauvegarde la référence et les seuils StallGuard.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -214,7 +171,7 @@ Calcule et sauvegarde la référence, le seuil d’avertissement et le seuil cri
 
 Envoi : `SGCAL CANCEL`
 
-Annule la calibration courante et restaure la configuration StallGuard précédente.
+Annule la calibration en cours.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -222,197 +179,28 @@ Annule la calibration courante et restaure la configuration StallGuard précéde
 
 Envoi : `FLUSH`
 
-Remet `activation_count` à zéro et sauvegarde immédiatement la statistique.
+Remet `activation_count` à zéro et sauvegarde la statistique.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
-## 2. Bluetooth Low Energy
+## 2. Bluetooth Low Energy — Nordic UART Service
 
-### UART BLE — Nordic UART Service
-
-Le service NUS standard utilise les UUID suivants :
+UUID NUS :
 
 - service : `6e400001-b5a3-f393-e0a9-e50e24dcca9e` ;
-- RX, écriture client vers seringue : `6e400002-b5a3-f393-e0a9-e50e24dcca9e` ;
-- TX, notification seringue vers client : `6e400003-b5a3-f393-e0a9-e50e24dcca9e`.
-
-Commande de provisionnement :
-
-```text
-WIFI:mon_reseau;PASSWORD:mon_mot_de_passe
-```
-
-Réponses possibles sur TX : `OK WIFI CONNECTING`, `OK QUEUED`, `ERR FORMAT`, `ERR TOO_LONG`,
-`ERR WIFI_REQUEST` ou `ERR PROVISIONING_CLOSED`. Activer les notifications TX avant
-l’écriture RX et terminer chaque commande ASCII par `\n`. La limite est de 111 octets, avec un
-SSID de 1 à 32 octets et un mot de passe de 0 à 64 octets.
-
-La fenêtre de provisionnement doit être ouverte au premier démarrage ou en maintenant PULL
-pendant le démarrage. Les identifiants sont persistés uniquement après connexion réussie.
-
-Les ordres ASCII de mouvement acceptés sur RX sont les mêmes que sur l’USB série : `PUSH`, `PULL`,
-`STOP`, `DOSE`, `MOVE`, `UNLOAD`, `ZERO`, `FAULTRESET`, `RESET`, `FLUSH`, `SET` et `SGCAL`.
-`BOOTSEL` est volontairement réservé à l'USB local.
-Les commandes de lecture `HELP`, `VERSION`, `STATUS` et `CONFIG` sont également acceptées.
-Les réponses longues sont découpées en plusieurs notifications TX selon le MTU négocié ; le client
-doit les concaténer jusqu'à la ligne finale `OK`. `OK QUEUED` confirme la mise en file d'un
-ordre moteur ; son exécution et sa fin se vérifient avec `STATUS`. Les erreurs sont
-`ERR COMMAND` ou `ERR BUSY`.
-La connexion BLE est automatiquement rompue après 60 secondes sans écriture RX ni notification TX.
-Chaque échange NUS remet entièrement cette temporisation d'inactivité à zéro.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-## 3. Wi-Fi
-
-Le Wi-Fi doit d’abord être configuré par BLE. Les identifiants validés sont persistants et la
-reconnexion est automatique aux démarrages suivants. Après connexion, la Pico expose :
-
-- `ws://<adresse-ip>/ws` pour les commandes et la télémétrie temps réel ;
-- `GET http://<adresse-ip>/api/status` pour lire l’état ;
-- `GET http://<adresse-ip>/api/config` pour lire tous les paramètres persistants ;
-- `POST http://<adresse-ip>/api/config` pour valider et enregistrer tous les paramètres ;
-- `POST http://<adresse-ip>/api/command` pour envoyer une commande JSON.
-
-La page principale est dédiée à la configuration des valeurs par défaut : géométrie,
-courants, vitesses, quantité fournie par le contact ou `DOSE`, recul, course et StallGuard.
-Les commandes moteur Wi-Fi restent présentes pour les tests et la maintenance.
-
-La carte annonce aussi le nom mDNS `dispenser.local` et le service DNS-SD
-`PasteDispenser._http._tcp` sur le port 80. Il est donc possible d’utiliser
-`http://dispenser.local/`, `ws://dispenser.local/ws` et les mêmes chemins d’API sur les
-hôtes prenant en charge mDNS.
-
-Pour WebSocket, envoyer directement l’objet JSON sous forme de trame texte. Pour HTTP,
-placer le même objet dans le corps de la requête POST avec `Content-Type: application/json`.
-
-L’exemple `example/nus_serial_example.py` montre l’échange de commandes ASCII par NUS.
-
-### État Wi-Fi : `GET /api/status`
-
-Exemple : `curl http://192.168.1.42/api/status`. Retour : télémétrie JSON courante.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### Configuration Wi-Fi : `GET /api/config` et `POST /api/config`
-
-`GET /api/config` retourne les paramètres configurables sans les identifiants Wi-Fi.
-Le formulaire de la page principale modifie ces valeurs puis les transmet ensemble à
-`POST /api/config`. Le firmware valide l'objet complet, le met en file et ne l'enregistre
-en flash que lorsque la machine est dans l'état `READY`. Une réponse
-`{"ok":true,"queued":true}` confirme la mise en file. Redémarrer ensuite la seringue pour
-appliquer les paramètres du pilote moteur.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `push_start`
-
-WebSocket ou corps POST : `{"command":"push_start"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `push_stop`
-
-WebSocket ou corps POST : `{"command":"push_stop"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `pull_start`
-
-WebSocket ou corps POST : `{"command":"pull_start"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `pull_stop`
-
-WebSocket ou corps POST : `{"command":"pull_stop"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `stop`
-
-WebSocket ou corps POST : `{"command":"stop"}`. La fermeture de la session WebSocket
-injecte aussi un arrêt local.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `dose`
-
-WebSocket ou corps POST :
-`{"command":"dose","distance_mm":0.8,"speed_mm_s":4,"retract_mm":0.1}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `move_relative`
-
-WebSocket ou corps POST :
-`{"command":"move_relative","distance_mm":-2,"speed_mm_s":3}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `unload_syringe`
-
-WebSocket ou corps POST : `{"command":"unload_syringe","speed_mm_s":3}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `set_zero`
-
-WebSocket ou corps POST : `{"command":"set_zero"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `reset`
-
-WebSocket ou corps POST : `{"command":"reset"}`. Acquitte le défaut courant.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `reboot`
-
-WebSocket ou corps POST : `{"command":"reboot"}`. La liaison est interrompue pendant le
-redémarrage.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `set_trigger_dose`
-
-WebSocket ou corps POST : `{"command":"set_trigger_dose","distance_mm":0.8}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `set_config`
-
-WebSocket ou corps POST :
-`{"command":"set_config","parameter":"dosing_speed_mm_s","value":4}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `flush_statistics`
-
-WebSocket ou corps POST : `{"command":"flush_statistics"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `sg_calibrate_start`
-
-WebSocket ou corps POST : `{"command":"sg_calibrate_start"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `sg_calibrate_finish`
-
-WebSocket ou corps POST : `{"command":"sg_calibrate_finish"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-### `sg_calibrate_cancel`
-
-WebSocket ou corps POST : `{"command":"sg_calibrate_cancel"}`.
-
-<div style="break-after: page; page-break-after: always;"></div>
-
-## Codes d’état communs
+- RX, client vers pousse-seringue : `6e400002-b5a3-f393-e0a9-e50e24dcca9e` ;
+- TX, pousse-seringue vers client : `6e400003-b5a3-f393-e0a9-e50e24dcca9e`.
+
+Activer les notifications TX, puis écrire sur RX une des commandes ASCII décrites au
+chapitre USB, terminée par `\n`. `BOOTSEL` reste réservé à l'USB local. Les réponses longues
+sont découpées selon le MTU et doivent être concaténées jusqu'à `OK`, `OK QUEUED` ou une
+ligne `ERR ...`.
+
+La connexion BLE est rompue après 60 secondes sans écriture RX ni notification TX. Chaque
+échange NUS relance cette temporisation. L'exemple `example/nus_serial_example.py` permet de
+tester la liaison depuis un PC.
+
+## États et défauts
 
 `state` : `BOOT`, `READY`, `MANUAL_PUSH`, `MANUAL_PULL`, `DOSING`, `RETRACTING`,
 `HOMING`, `STOPPING` ou `FAULT`.
@@ -421,7 +209,3 @@ WebSocket ou corps POST : `{"command":"sg_calibrate_cancel"}`.
 `3` surchauffe, `4` StallGuard critique, `5` timeout manuel, `6` limite logicielle.
 
 `load` : `0` normal, `1` élevé, `2` avertissement, `3` blocage critique.
-
-Les réponses HTTP à `POST /api/command` sont `{"ok":true,"queued":true}` si la commande
-a été comprise et mise en file, sinon `{"ok":false,"queued":false}`. Une mise en file
-confirme la réception, pas l'application effective ni la fin du mouvement.

@@ -7,9 +7,7 @@
 #include "command_api.h"
 #include "safety.h"
 #include "stallguard_calibration.h"
-#include "ws_crypto.h"
 #include "tmc_current.h"
-#include "wifi_uart_command.h"
 int main(void){
  device_config_t defaults;device_config_defaults(&defaults);assert(device_config_validate(&defaults));device_config_t invalid=defaults;invalid.dosing_speed_mm_s=26;assert(!device_config_validate(&invalid));invalid=defaults;invalid.retract_speed_mm_s=0;assert(!device_config_validate(&invalid));invalid=defaults;invalid.amax_mm_s2=301;assert(!device_config_validate(&invalid));invalid=defaults;invalid.stallguard_threshold=64;assert(!device_config_validate(&invalid));
  motor_config_t c={.motor_steps_per_rev=200,.microsteps=16,.motor_run_current_mA=800,.motor_hold_current_mA=300,.screw_pitch_mm=2.0f,.manual_speed_mm_s=5.0f,.a1_mm_s2=100.0f,.amax_mm_s2=100.0f,.dmax_mm_s2=100.0f,.d1_mm_s2=100.0f};
@@ -33,11 +31,9 @@ int main(void){
  const char *ascii_amax="SET AMAX_MM_S2 250";assert(command_parse_ascii(ascii_amax,strlen(ascii_amax),&cmd));assert(cmd.kind==CMD_SET_CONFIG&&cmd.parameter==CFG_AMAX_MM_S2&&fabsf(cmd.value-250)<.001f);
  const char *ascii_reset="RESET";assert(command_parse_ascii(ascii_reset,strlen(ascii_reset),&cmd)&&cmd.kind==CMD_REBOOT);
  const char *ascii_bootsel="BOOTSEL";assert(command_parse_ascii(ascii_bootsel,strlen(ascii_bootsel),&cmd)&&cmd.kind==CMD_BOOTSEL);
- char uart_ssid[33],uart_password[65];const char*uart_wifi="WIFI:mon_reseau;PASSWORD:mon_mot_de_passe";assert(wifi_uart_parse(uart_wifi,strlen(uart_wifi),uart_ssid,uart_password));assert(!strcmp(uart_ssid,"mon_reseau")&&!strcmp(uart_password,"mon_mot_de_passe"));assert(!wifi_uart_parse("WIFI:bad",8,uart_ssid,uart_password));
  device_config_t d={.manual_timeout_ms=1000,.position_min_mm=0,.position_max_mm=10,.stallguard_filter_count=3,.stallguard_warning_level=100};safety_t s;safety_init(&s);safety_manual_started(&s,10);assert(safety_check(&s,&d,false,true,true,500,200,true,5,1)==SAFETY_OK);assert(safety_check(&s,&d,false,true,true,1011,200,true,5,1)==SAFETY_TIMEOUT);
  d.stallguard_enabled=1;d.stallguard_baseline=400;d.stallguard_warning_level=300;d.stallguard_critical_level=200;d.stallguard_filter_count=2;safety_init(&s);assert(safety_check(&s,&d,false,false,true,20,100,true,5,1)==SAFETY_OK);assert(safety_check(&s,&d,false,false,true,25,100,true,5,1)==SAFETY_STALL);
  sg_calibration_t cal;uint16_t baseline,warning,critical;sg_calibration_start(&cal);for(int i=0;i<120;i++)sg_calibration_add(&cal,400+(i%5));assert(sg_calibration_finish(&cal,&baseline,&warning,&critical));assert(baseline==402&&warning==281&&critical==201);
- char accept[29];assert(ws_crypto_accept("dGhlIHNhbXBsZSBub25jZQ==",24,accept));assert(!strcmp(accept,"s3pPLMBiTxaQ9kYGzzhZRbK+xOo="));
  assert(tmc_internal_full_scale_mA(7500.0f)==1248);assert(tmc_internal_current_scale_from_mA(800,7500.0f)==20);assert(tmc_internal_current_mA_from_scale(20,7500.0f)==819);assert(tmc_internal_current_scale_from_mA(300,7500.0f)==7);assert(tmc_internal_current_mA_from_scale(7,7500.0f)==312);
  puts("All tests passed");
 }

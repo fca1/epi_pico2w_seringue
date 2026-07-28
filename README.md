@@ -1,9 +1,10 @@
 # Pousse-seringue Pico 2 / Pico 2 W
 
 Firmware FreeRTOS/Pico SDK pour un pousse-seringue commandé par TMC5130A. La Pico 2 W
-propose trois transports indépendants : USB CDC série, Bluetooth Low Energy NUS et Wi-Fi.
+propose deux transports indépendants : USB CDC série et Bluetooth Low Energy NUS.
 La référence détaillée des commandes se trouve dans
-[`docs/communications.md`](docs/communications.md).
+[`docs/communications.md`](docs/communications.md). L'affectation des GPIO et les
+consignes de câblage sont décrites dans [`docs/hardware.md`](docs/hardware.md).
 
 ## Fonctions principales
 
@@ -11,9 +12,8 @@ La référence détaillée des commandes se trouve dans
 - limites de course en mm et indication de course restante ;
 - accélération trapézoïdale TMC5130A (`A1`, `AMAX`, `DMAX`, `D1`) ;
 - StallGuard avec calibration et arrêt sur blocage ;
-- configuration, identifiants Wi-Fi et statistiques persistants en flash ;
+- configuration et statistiques persistantes en flash ;
 - entrée physique DOSE avec pull-up ;
-- serveur HTTP/WebSocket Wi-Fi et mDNS `http://dispenser.local/` ;
 - LED lente hors connexion, rapide connecté, fixe pendant un mouvement.
 
 ## BLE : Nordic UART Service uniquement
@@ -28,14 +28,8 @@ Activer les notifications TX, puis écrire une ligne ASCII terminée par `\n` su
 commandes machine sont identiques à celles de la console USB. La commande `DOSE` sans
 argument déclenche la fourniture avec les paramètres persistants, comme le contact GP13.
 
-Le provisionnement Wi-Fi utilise également RX/TX :
-
-```text
-WIFI:mon_reseau;PASSWORD:mon_mot_de_passe
-```
-
-La réponse est transmise par notification TX, par exemple `OK`, `OK WIFI CONNECTING`,
-`ERR COMMAND`, `ERR BUSY` ou `ERR PROVISIONING_CLOSED`.
+Les réponses sont transmises par notification TX, par exemple `OK`, `OK QUEUED`,
+`ERR COMMAND` ou `ERR BUSY`.
 
 Exemple Python :
 
@@ -65,22 +59,6 @@ RESET
 BOOTSEL
 ```
 
-## Wi-Fi
-
-Après provisionnement réussi, les identifiants sont sauvegardés et la connexion est retentée
-automatiquement au démarrage après l'initialisation BLE.
-La Pico expose :
-
-- `http://dispenser.local/` ;
-- `ws://dispenser.local/ws` ;
-- `GET /api/status` ;
-- `GET /api/config` ;
-- `POST /api/config` ;
-- `POST /api/command`.
-
-La page HTTP sert principalement à consulter et modifier les paramètres persistants. Le
-WebSocket et l'API de commande moteur restent disponibles pour les tests et la maintenance.
-
 ## Compilation
 
 ```powershell
@@ -99,6 +77,9 @@ python tests/run_host_tests.py
 ```
 
 ## Matériel et unités
+
+Voir [`docs/hardware.md`](docs/hardware.md) pour le tableau complet des entrées/sorties,
+leurs broches physiques, leur polarité et le câblage du TMC5130A et des boutons.
 
 Les distances sont exprimées en mm, les vitesses en mm/s, les accélérations en mm/s² et
 les courants en mA. Le TMC5130A utilise la mesure de courant interne par `RDS(on)` ; aucun

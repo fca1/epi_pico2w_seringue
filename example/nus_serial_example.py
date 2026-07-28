@@ -3,6 +3,7 @@ import argparse
 import asyncio
 
 from bleak import BleakClient, BleakScanner
+from bleak.exc import BleakError
 
 NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 NUS_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
@@ -33,7 +34,14 @@ async def main(command: str) -> None:
                 answer.set_result(bytes(received))
 
         await client.start_notify(NUS_TX, notified)
-        await client.write_gatt_char(NUS_RX, (command + "\n").encode(), response=True)
+        try:
+            await client.write_gatt_char(NUS_RX, (command + "\n").encode(), response=True)
+        except BleakError:
+            # The firmware may reject a GATT write while still returning a precise
+            # textual NUS error notification. Preserve that useful response.
+            await asyncio.sleep(0.1)
+            if not answer.done():
+                raise
         await asyncio.wait_for(answer, timeout=5)
 
 

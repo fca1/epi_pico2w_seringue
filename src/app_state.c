@@ -21,7 +21,7 @@ bool app_state_dispatch(app_machine_t *m, app_event_t e){
   } return false;
 }
 const char *app_state_name(app_state_t s){
-  static const char *n[]={"BOOT","WIFI_CONNECTING","BLE_PROVISIONING","READY","MANUAL_PUSH",
+  static const char *n[]={"BOOT","READY","MANUAL_PUSH",
     "MANUAL_PULL","DOSING","RETRACTING","HOMING","STOPPING","FAULT"};
   return (unsigned)s<sizeof(n)/sizeof(n[0])?n[s]:"UNKNOWN";
 }

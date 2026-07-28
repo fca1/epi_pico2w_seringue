@@ -1,7 +1,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-typedef enum { APP_BOOT, APP_WIFI_CONNECTING, APP_BLE_PROVISIONING, APP_READY,
+typedef enum { APP_BOOT, APP_READY,
   APP_MANUAL_PUSH, APP_MANUAL_PULL, APP_DOSING, APP_RETRACTING, APP_HOMING,
   APP_STOPPING, APP_FAULT } app_state_t;
 typedef enum { EVT_INIT_OK, EVT_PUSH, EVT_PULL, EVT_RELEASE, EVT_DOSE,

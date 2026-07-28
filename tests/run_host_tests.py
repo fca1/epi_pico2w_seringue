@@ -14,8 +14,6 @@ SOURCES = [
     "src/device_config.c",
     "src/safety.c",
     "src/stallguard_calibration.c",
-    "src/ws_crypto.c",
-    "src/wifi_uart_command.c",
     "src/tmc_current.c",
 ]
 
