@@ -41,6 +41,7 @@ static int direction;
 static uint32_t phase_ms;
 static float retract_mm;
 static const char *unload_result="none";
+static void format_telemetry(char *json,size_t capacity,const telemetry_snapshot_t *s);
 #if DISPENSER_HAS_RADIO
 static bool radio_ready;
 
@@ -172,30 +173,21 @@ static void telemetry_task(void *arg){
  }
 }
 
-static void print_help(void){
- puts("PasteDispenser " DISPENSER_FIRMWARE_VERSION);
- puts("HELP | VERSION | STATUS | CONFIG");
- puts("PUSH | PULL | STOP | DOSE <mm> [mm/s] [retract_mm]");
- puts("MOVE <mm> [mm/s] | UNLOAD [mm/s] | ZERO | FAULTRESET | RESET | BOOTSEL");
- puts("SET <parameter> <value> | SGCAL START|FINISH|CANCEL | FLUSH");
- puts("Parameters: screw_pitch_mm motor_steps_per_rev microsteps motor_run_current_mA motor_hold_current_mA");
- puts(" manual_speed_mm_s dosing_speed_mm_s trigger_dose_mm a1_mm_s2 amax_mm_s2 dmax_mm_s2 d1_mm_s2");
- puts(" retract_distance_mm retract_speed_mm_s");
- puts(" retract_delay_ms position_min_mm position_max_mm manual_timeout_ms stallguard_threshold stallguard_warning_level");
- puts(" stallguard_critical_level stallguard_filter_count stallguard_enabled");
- puts("RESET reboots the controller; settings are saved in flash. Mechanical settings take full effect after RESET.");
- puts("BOOTSEL stops the motor and enters USB firmware-update mode.");
+bool app_tasks_format_query(const char *command,char *response,size_t capacity){
+ if(!command||!response||capacity<2)return false;
+ if(!strcasecmp(command,"VERSION")){snprintf(response,capacity,DISPENSER_FIRMWARE_NAME " " DISPENSER_FIRMWARE_VERSION "\nOK\n");return true;}
+ if(!strcasecmp(command,"STATUS")){telemetry_snapshot_t s;taskENTER_CRITICAL();s=telemetry_snapshot;taskEXIT_CRITICAL();format_telemetry(response,capacity,&s);size_t n=strlen(response);snprintf(response+n,capacity-n,"\nOK\n");return true;}
+ if(!strcasecmp(command,"CONFIG")){snprintf(response,capacity,"CONFIG version=%lu screw_pitch_mm=%.3f motor_steps_per_rev=%u microsteps=%u motor_run_current_mA=%u motor_hold_current_mA=%u manual_speed_mm_s=%.3f dosing_speed_mm_s=%.3f trigger_dose_mm=%.3f a1_mm_s2=%.3f amax_mm_s2=%.3f dmax_mm_s2=%.3f d1_mm_s2=%.3f retract_distance_mm=%.3f retract_speed_mm_s=%.3f retract_delay_ms=%lu position_min_mm=%.3f position_max_mm=%.3f manual_timeout_ms=%lu stallguard_threshold=%d stallguard_warning_level=%u stallguard_critical_level=%u stallguard_filter_count=%u stallguard_enabled=%u\nOK\n",
+  (unsigned long)config.version,config.screw_pitch_mm,config.motor_steps_per_rev,config.microsteps,config.motor_run_current_mA,config.motor_hold_current_mA,config.manual_speed_mm_s,config.dosing_speed_mm_s,config.trigger_dose_mm,config.a1_mm_s2,config.amax_mm_s2,config.dmax_mm_s2,config.d1_mm_s2,config.retract_distance_mm,config.retract_speed_mm_s,(unsigned long)config.retract_delay_ms,config.position_min_mm,config.position_max_mm,(unsigned long)config.manual_timeout_ms,config.stallguard_threshold,config.stallguard_warning_level,config.stallguard_critical_level,config.stallguard_filter_count,config.stallguard_enabled);return true;}
+ if(!strcasecmp(command,"HELP")){snprintf(response,capacity,
+  "PasteDispenser " DISPENSER_FIRMWARE_VERSION "\nHELP | VERSION | STATUS | CONFIG\nPUSH | PULL | STOP | DOSE <mm> [mm/s] [retract_mm]\nMOVE <mm> [mm/s] | UNLOAD [mm/s] | ZERO | FAULTRESET | RESET\nSET <parameter> <value> | SGCAL START|FINISH|CANCEL | FLUSH\nOK\n");return true;}
+ return false;
 }
-static void print_config(void){printf("CONFIG version=%lu screw_pitch_mm=%.3f motor_steps_per_rev=%u microsteps=%u motor_run_current_mA=%u motor_hold_current_mA=%u manual_speed_mm_s=%.3f dosing_speed_mm_s=%.3f trigger_dose_mm=%.3f a1_mm_s2=%.3f amax_mm_s2=%.3f dmax_mm_s2=%.3f d1_mm_s2=%.3f retract_distance_mm=%.3f retract_speed_mm_s=%.3f retract_delay_ms=%lu position_min_mm=%.3f position_max_mm=%.3f manual_timeout_ms=%lu stallguard_threshold=%d stallguard_warning_level=%u stallguard_critical_level=%u stallguard_filter_count=%u stallguard_enabled=%u\n",
- (unsigned long)config.version,config.screw_pitch_mm,config.motor_steps_per_rev,config.microsteps,config.motor_run_current_mA,config.motor_hold_current_mA,config.manual_speed_mm_s,config.dosing_speed_mm_s,config.trigger_dose_mm,config.a1_mm_s2,config.amax_mm_s2,config.dmax_mm_s2,config.d1_mm_s2,config.retract_distance_mm,config.retract_speed_mm_s,(unsigned long)config.retract_delay_ms,config.position_min_mm,config.position_max_mm,(unsigned long)config.manual_timeout_ms,config.stallguard_threshold,config.stallguard_warning_level,config.stallguard_critical_level,config.stallguard_filter_count,config.stallguard_enabled);}
 
 static void usb_command_task(void *arg){
  (void)arg;char line[512];size_t used=0;
  for(;;){int ch=getchar_timeout_us(0);if(ch==PICO_ERROR_TIMEOUT){vTaskDelay(pdMS_TO_TICKS(5));continue;}if(ch=='\r')continue;if(ch=='\n'){if(used){line[used]=0;
-    if(!strcasecmp(line,"HELP")){print_help();puts("OK");}
-    else if(!strcasecmp(line,"VERSION")){puts(DISPENSER_FIRMWARE_NAME " " DISPENSER_FIRMWARE_VERSION);puts("OK");}
-    else if(!strcasecmp(line,"STATUS")){char json[TELEMETRY_SIZE];telemetry_snapshot_t s;taskENTER_CRITICAL();s=telemetry_snapshot;taskEXIT_CRITICAL();format_telemetry(json,sizeof(json),&s);puts(json);puts("OK");}
-    else if(!strcasecmp(line,"CONFIG")){print_config();puts("OK");}
+    char response[768];if(app_tasks_format_query(line,response,sizeof(response)))printf("%s",response);
     else{machine_command_t command;bool parsed=line[0]=='{'?command_parse_json(line,used,&command):command_parse_ascii(line,used,&command);if(parsed&&submit_command(&command))puts("OK QUEUED");else puts("ERR SYNTAX_OR_QUEUE");}}
    used=0;}else if(used<sizeof(line)-1)line[used++]=(char)ch;else{used=0;puts("ERR LINE_TOO_LONG");}}
 }

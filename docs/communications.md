@@ -252,7 +252,11 @@ pendant le démarrage. Les identifiants sont persistés uniquement après connex
 Les ordres ASCII de mouvement acceptés sur RX sont les mêmes que sur l’USB série : `PUSH`, `PULL`,
 `STOP`, `DOSE`, `MOVE`, `UNLOAD`, `ZERO`, `FAULTRESET`, `RESET`, `FLUSH`, `SET` et `SGCAL`.
 `BOOTSEL` est volontairement réservé à l'USB local.
-La réponse est transmise sur TX (`OK`, `ERR COMMAND` ou `ERR BUSY`).
+Les commandes de lecture `HELP`, `VERSION`, `STATUS` et `CONFIG` sont également acceptées.
+Les réponses longues sont découpées en plusieurs notifications TX selon le MTU négocié ; le client
+doit les concaténer jusqu'à la ligne finale `OK`. Les erreurs sont `ERR COMMAND` ou `ERR BUSY`.
+La connexion BLE est automatiquement rompue après 60 secondes sans écriture RX ni notification TX.
+Chaque échange NUS remet entièrement cette temporisation d'inactivité à zéro.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
