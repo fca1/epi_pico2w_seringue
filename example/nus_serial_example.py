@@ -29,7 +29,7 @@ async def main(command: str) -> None:
             received.extend(data)
             text = bytes(data).decode("utf-8", errors="replace")
             print(text, end="")
-            if not answer.done() and (received.endswith(b"\nOK\n") or received.startswith(b"ERR ")):
+            if not answer.done() and (received.endswith(b"\nOK\n") or received.endswith(b"OK QUEUED\n") or received.startswith(b"ERR ")):
                 answer.set_result(bytes(received))
 
         await client.start_notify(NUS_TX, notified)

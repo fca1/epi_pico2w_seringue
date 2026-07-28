@@ -25,8 +25,8 @@ Le firmware annonce uniquement un profil série compatible Nordic UART Service :
 - TX, pousse-seringue vers client : `6e400003-b5a3-f393-e0a9-e50e24dcca9e`.
 
 Activer les notifications TX, puis écrire une ligne ASCII terminée par `\n` sur RX. Les
-commandes machine sont identiques à celles de la console USB : `PUSH`, `PULL`, `STOP`,
-`DOSE`, `MOVE`, `UNLOAD`, `ZERO`, `FAULTRESET`, `RESET`, `FLUSH`, `SET` et `SGCAL`.
+commandes machine sont identiques à celles de la console USB. La commande `DOSE` sans
+argument déclenche la fourniture avec les paramètres persistants, comme le contact GP13.
 
 Le provisionnement Wi-Fi utilise également RX/TX :
 
@@ -67,16 +67,19 @@ BOOTSEL
 
 ## Wi-Fi
 
-Après provisionnement réussi, les identifiants sont sauvegardés. La connexion est déclenchée
-explicitement par NUS afin de toujours conserver un lien BLE disponible au démarrage.
+Après provisionnement réussi, les identifiants sont sauvegardés et la connexion est retentée
+automatiquement au démarrage après l'initialisation BLE.
 La Pico expose :
 
 - `http://dispenser.local/` ;
 - `ws://dispenser.local/ws` ;
 - `GET /api/status` ;
+- `GET /api/config` ;
+- `POST /api/config` ;
 - `POST /api/command`.
 
-Le WebSocket et l'API HTTP transportent les commandes JSON décrites dans la documentation.
+La page HTTP sert principalement à consulter et modifier les paramètres persistants. Le
+WebSocket et l'API de commande moteur restent disponibles pour les tests et la maintenance.
 
 ## Compilation
 

@@ -1,3 +1,3 @@
 #pragma once
 #define DISPENSER_FIRMWARE_NAME "PasteDispenser"
-#define DISPENSER_FIRMWARE_VERSION "1.4.1"
+#define DISPENSER_FIRMWARE_VERSION "1.5.0"

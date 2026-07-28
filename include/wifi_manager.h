@@ -12,3 +12,5 @@ bool wifi_manager_request_connect(void);
 bool wifi_manager_request_scan(void);const char *wifi_manager_scan_results(void);
 wifi_state_t wifi_manager_state(void);const char *wifi_manager_state_name(void);const char *wifi_manager_ip(void);
 bool wifi_manager_take_command(machine_command_t *command);void wifi_manager_publish(const char *json);
+void wifi_manager_publish_config(const device_config_t *config);
+bool wifi_manager_take_config(device_config_t *config);

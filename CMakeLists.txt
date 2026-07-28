@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 include(pico_sdk_import.cmake)
 project(pico2_seringue C CXX ASM)
-option(DISPENSER_WIFI_AUTOCONNECT "Automatically reconnect to saved Wi-Fi at boot" OFF)
+option(DISPENSER_WIFI_AUTOCONNECT "Automatically reconnect to saved Wi-Fi at boot" ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
@@ -9,7 +9,7 @@ set(FREERTOS_KERNEL_PATH ${CMAKE_CURRENT_LIST_DIR}/lib/FreeRTOS-Kernel)
 include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
 
 set(DISPENSER_SOURCES src/main.c src/app_tasks.c src/app_state.c src/buttons.c src/motor_control.c
-  src/tmc5130.c src/tmc_current.c src/config_store.c src/statistics.c src/safety.c src/command_api.c
+  src/tmc5130.c src/tmc_current.c src/device_config.c src/config_store.c src/statistics.c src/safety.c src/command_api.c
   src/stallguard_calibration.c src/ws_crypto.c src/wifi_uart_command.c src/status_led.c)
 if(PICO_BOARD STREQUAL "pico2_w")
   list(APPEND DISPENSER_SOURCES src/ble_service.c src/wifi_manager.c)

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <strings.h>
 #include "pico/stdlib.h"
@@ -35,19 +36,20 @@ static app_machine_t machine;
 static safety_t safety;
 static sg_calibration_t sg_cal;
 static QueueHandle_t command_queue;
+static QueueHandle_t config_queue;
 static telemetry_snapshot_t telemetry_snapshot;
 static volatile bool motor_moving,radio_connected;
 static int direction;
 static uint32_t phase_ms;
 static float retract_mm;
 static const char *unload_result="none";
+static bool provision_at_boot,pull_inhibited_until_release;
 static void format_telemetry(char *json,size_t capacity,const telemetry_snapshot_t *s);
 #if DISPENSER_HAS_RADIO
 static bool radio_ready;
 
 static void radio_init_task(void *arg){
  (void)arg;
- bool provision_at_boot=!gpio_get(PIN_SW_PULL);
  radio_ready=ble_service_init();
  status_led_init(radio_ready);
  if(radio_ready){
@@ -67,7 +69,13 @@ static void set_fault(safety_fault_t f){motor_stop();machine.fault_code=f;app_st
 static bool begin_manual(int d,uint32_t now){if(machine.state!=APP_READY||!motor_manual(d))return false;direction=d;safety_manual_started(&safety,now);app_state_dispatch(&machine,d>0?EVT_PUSH:EVT_PULL);if(d>0)statistics_increment();return true;}
 static void stop_motion(void){if(machine.state==APP_HOMING)unload_result="stopped";motor_stop();direction=0;if(machine.state!=APP_FAULT)app_state_dispatch(&machine,EVT_STOP);}
 
-static bool apply_config_value(config_param_t parameter,float value){device_config_t next=config;
+static void preserve_wifi_credentials(device_config_t *target){device_config_t persisted;if(config_store_load(&persisted)){memcpy(target->wifi_ssid,persisted.wifi_ssid,sizeof(target->wifi_ssid));memcpy(target->wifi_password,persisted.wifi_password,sizeof(target->wifi_password));}}
+static bool apply_config_value(config_param_t parameter,float value){device_config_t next=config;preserve_wifi_credentials(&next);
+ if(!isfinite(value))return false;
+ if((parameter==CFG_MOTOR_STEPS_PER_REV||parameter==CFG_MICROSTEPS||parameter==CFG_RUN_CURRENT_MA||parameter==CFG_HOLD_CURRENT_MA||parameter==CFG_STALLGUARD_WARNING||parameter==CFG_STALLGUARD_CRITICAL||parameter==CFG_STALLGUARD_FILTER_COUNT)&&(value<0||value>65535||truncf(value)!=value))return false;
+ if((parameter==CFG_RETRACT_DELAY_MS||parameter==CFG_MANUAL_TIMEOUT_MS)&&(value<0||value>4294967040.0f||truncf(value)!=value))return false;
+ if(parameter==CFG_STALLGUARD_THRESHOLD&&(value<-64||value>63||truncf(value)!=value))return false;
+ if(parameter==CFG_STALLGUARD_ENABLED&&value!=0&&value!=1)return false;
  switch(parameter){
  case CFG_SCREW_PITCH_MM:next.screw_pitch_mm=value;break;case CFG_MOTOR_STEPS_PER_REV:next.motor_steps_per_rev=(uint16_t)value;break;case CFG_MICROSTEPS:next.microsteps=(uint16_t)value;break;
  case CFG_RUN_CURRENT_MA:next.motor_run_current_mA=(uint16_t)value;break;case CFG_HOLD_CURRENT_MA:next.motor_hold_current_mA=(uint16_t)value;break;
@@ -81,6 +89,12 @@ static bool apply_config_value(config_param_t parameter,float value){device_conf
  motor_config_t candidate={.motor_steps_per_rev=next.motor_steps_per_rev,.microsteps=next.microsteps,.motor_run_current_mA=next.motor_run_current_mA,.motor_hold_current_mA=next.motor_hold_current_mA,.screw_pitch_mm=next.screw_pitch_mm,.manual_speed_mm_s=next.manual_speed_mm_s,.a1_mm_s2=next.a1_mm_s2,.amax_mm_s2=next.amax_mm_s2,.dmax_mm_s2=next.dmax_mm_s2,.d1_mm_s2=next.d1_mm_s2};
  if(!device_config_validate(&next)||!motor_config_valid(&candidate)||!config_store_save(&next))return false;config=next;return true;}
 
+static bool apply_full_config(device_config_t *next){preserve_wifi_credentials(next);motor_config_t candidate={.motor_steps_per_rev=next->motor_steps_per_rev,.microsteps=next->microsteps,.motor_run_current_mA=next->motor_run_current_mA,.motor_hold_current_mA=next->motor_hold_current_mA,.screw_pitch_mm=next->screw_pitch_mm,.manual_speed_mm_s=next->manual_speed_mm_s,.a1_mm_s2=next->a1_mm_s2,.amax_mm_s2=next->amax_mm_s2,.dmax_mm_s2=next->dmax_mm_s2,.d1_mm_s2=next->d1_mm_s2};if(!device_config_validate(next)||!motor_config_valid(&candidate)||!config_store_save(next))return false;config=*next;
+#if DISPENSER_HAS_RADIO
+ wifi_manager_publish_config(&config);
+#endif
+ return true;}
+
 static void execute(machine_command_t *c,uint32_t now){
  if(c->kind==CMD_STOP||c->kind==CMD_PUSH_STOP||c->kind==CMD_PULL_STOP){stop_motion();return;}
  if(c->kind==CMD_BOOTSEL){motor_stop();stdio_flush();vTaskDelay(pdMS_TO_TICKS(50));rom_reset_usb_boot(0,0);return;}
@@ -88,9 +102,17 @@ static void execute(machine_command_t *c,uint32_t now){
  if(c->kind==CMD_RESET&&machine.state==APP_FAULT){safety_init(&safety);app_state_dispatch(&machine,EVT_RESET);return;}
  if(c->kind==CMD_SG_CAL_CANCEL){sg_cal.active=false;motor_configure_stallguard(config.stallguard_enabled,config.stallguard_threshold);return;}
  if(c->kind==CMD_SG_CAL_START&&machine.state==APP_READY){sg_calibration_start(&sg_cal);motor_configure_stallguard(true,config.stallguard_threshold);return;}
- if(c->kind==CMD_SG_CAL_FINISH&&machine.state==APP_READY){uint16_t baseline,warning,critical;if(sg_calibration_finish(&sg_cal,&baseline,&warning,&critical)){config.stallguard_baseline=baseline;config.stallguard_warning_level=warning;config.stallguard_critical_level=critical;config.stallguard_calibration_speed_mm_s=config.manual_speed_mm_s;config.stallguard_enabled=1;config_store_save(&config);motor_configure_stallguard(true,config.stallguard_threshold);}return;}
- if(c->kind==CMD_SET_TRIGGER_DOSE){if(c->distance_mm>0&&c->distance_mm<=100){config.trigger_dose_mm=c->distance_mm;config_store_save(&config);}return;}
- if(c->kind==CMD_SET_CONFIG){apply_config_value(c->parameter,c->value);return;}
+ if(c->kind==CMD_SG_CAL_FINISH&&machine.state==APP_READY){uint16_t baseline,warning,critical;if(sg_calibration_finish(&sg_cal,&baseline,&warning,&critical)){config.stallguard_baseline=baseline;config.stallguard_warning_level=warning;config.stallguard_critical_level=critical;config.stallguard_calibration_speed_mm_s=config.manual_speed_mm_s;config.stallguard_enabled=1;preserve_wifi_credentials(&config);config_store_save(&config);motor_configure_stallguard(true,config.stallguard_threshold);
+#if DISPENSER_HAS_RADIO
+  wifi_manager_publish_config(&config);
+#endif
+ }return;}
+ if(c->kind==CMD_SET_TRIGGER_DOSE){if(c->distance_mm>0&&c->distance_mm<=100)apply_config_value(CFG_TRIGGER_DOSE_MM,c->distance_mm);return;}
+ if(c->kind==CMD_SET_CONFIG){if(apply_config_value(c->parameter,c->value)){
+#if DISPENSER_HAS_RADIO
+  wifi_manager_publish_config(&config);
+#endif
+ }return;}
  if(c->kind==CMD_FLUSH_STATISTICS&&machine.state==APP_READY){statistics_flush();statistics_persist();return;}
  if(machine.state!=APP_READY)return;
  switch(c->kind){
@@ -99,7 +121,7 @@ static void execute(machine_command_t *c,uint32_t now){
  case CMD_UNLOAD_SYRINGE:{float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());if(pos<=config.position_min_mm){motor_set_position_mm(config.position_min_mm);unload_result="position_min";}else if(motor_move_relative(config.position_min_mm-pos,c->speed_mm_s>0?c->speed_mm_s:config.manual_speed_mm_s)){direction=-1;retract_mm=0;unload_result="running";safety_init(&safety);safety_manual_started(&safety,now);app_state_dispatch(&machine,EVT_HOME);}break;}
  case CMD_SET_ZERO:motor_set_zero();break;
  case CMD_MOVE_RELATIVE:if(motor_move_relative(c->distance_mm,c->speed_mm_s>0?c->speed_mm_s:config.dosing_speed_mm_s)){direction=c->distance_mm>=0?1:-1;retract_mm=0;app_state_dispatch(&machine,EVT_DOSE);if(c->distance_mm>0)statistics_increment();}break;
- case CMD_DOSE:if(c->distance_mm>0&&motor_move_relative(c->distance_mm,c->speed_mm_s>0?c->speed_mm_s:config.dosing_speed_mm_s)){direction=1;retract_mm=c->retract_mm>=0?c->retract_mm:config.retract_distance_mm;app_state_dispatch(&machine,EVT_DOSE);statistics_increment();}break;
+ case CMD_DOSE:{float distance=c->distance_mm>0?c->distance_mm:config.trigger_dose_mm;float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());if(distance>0&&distance<=config.position_max_mm-pos&&motor_move_relative(distance,c->speed_mm_s>0?c->speed_mm_s:config.dosing_speed_mm_s)){direction=1;retract_mm=c->retract_mm>=0?c->retract_mm:config.retract_distance_mm;app_state_dispatch(&machine,EVT_DOSE);statistics_increment();}break;}
  default:break;
  }
 }
@@ -114,20 +136,22 @@ static void update_telemetry(void){
 
 static void motor_task(void *arg){
  (void)arg;button_state_t old={0};uint32_t conflict_since=0,last_status=0;TickType_t wake=xTaskGetTickCount();
- for(;;){uint32_t now=to_ms_since_boot(get_absolute_time());button_state_t b=buttons_update(now);machine_command_t command;
+  for(;;){uint32_t now=to_ms_since_boot(get_absolute_time());button_state_t b=buttons_update(now);machine_command_t command;device_config_t requested_config;
+  if(pull_inhibited_until_release){if(gpio_get(PIN_SW_PULL))pull_inhibited_until_release=false;b.pull=false;b.conflict=b.push&&b.pull;}
+  if(machine.state==APP_READY&&xQueueReceive(config_queue,&requested_config,0)==pdTRUE)apply_full_config(&requested_config);
   while(xQueueReceive(command_queue,&command,0)==pdTRUE)execute(&command,now);
   if(b.conflict){if(!conflict_since)conflict_since=now;set_fault(SAFETY_BUTTON_CONFLICT);if(now-conflict_since>=5000){motor_stop();config_store_factory_reset();statistics_factory_reset();watchdog_reboot(0,0,0);}}
   else{conflict_since=0;if(machine.state!=APP_FAULT){
    if(b.push&&!old.push)begin_manual(1,now);else if(b.pull&&!old.pull)begin_manual(-1,now);else if(b.dose&&!old.dose){machine_command_t trigger={.kind=CMD_DOSE,.distance_mm=config.trigger_dose_mm,.speed_mm_s=config.dosing_speed_mm_s,.retract_mm=config.retract_distance_mm};execute(&trigger,now);}
-   else if(!b.push&&!b.pull&&(machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL))stop_motion();
+   else if((machine.state==APP_MANUAL_PUSH&&old.push&&!b.push)||(machine.state==APP_MANUAL_PULL&&old.pull&&!b.pull))stop_motion();
    if(machine.state==APP_STOPPING&&motor_is_stopped())app_state_dispatch(&machine,EVT_STOPPED);
    if(machine.state==APP_DOSING&&motor_target_reached()){direction=0;if(retract_mm>0){app_state_dispatch(&machine,EVT_MOVE_DONE);phase_ms=now;}else{app_state_dispatch(&machine,EVT_MOVE_DONE);app_state_dispatch(&machine,EVT_MOVE_DONE);}}
    if(machine.state==APP_RETRACTING&&direction==0&&now-phase_ms>=config.retract_delay_ms){if(motor_move_relative(-retract_mm,config.retract_speed_mm_s))direction=-1;else set_fault(SAFETY_SPI);}
    else if(machine.state==APP_RETRACTING&&direction<0&&motor_target_reached()){direction=0;app_state_dispatch(&machine,EVT_MOVE_DONE);}
    if(machine.state==APP_HOMING&&motor_target_reached()){motor_stop();motor_set_position_mm(config.position_min_mm);direction=0;unload_result="position_min";app_state_dispatch(&machine,EVT_MOVE_DONE);}
-   bool spi=true;uint32_t ds=motor_driver_status(&spi);float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());bool manual=machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL;bool unload=machine.state==APP_HOMING;
+   bool spi=true;uint32_t ds=motor_driver_status(&spi);float pos=motor_microsteps_to_mm(&motor_cfg,motor_position_steps());bool manual=machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL;bool unload=machine.state==APP_HOMING;bool dosing=machine.state==APP_DOSING||machine.state==APP_RETRACTING;
    if(sg_cal.active&&manual)sg_calibration_add(&sg_cal,ds&0x3ffu);device_config_t safety_cfg=config;if(sg_cal.active)safety_cfg.stallguard_enabled=0;
-   safety_fault_t sf=safety_check(&safety,&safety_cfg,false,manual||unload,now,ds,spi,pos,direction);if(sf){if(unload&&(sf==SAFETY_STALL||sf==SAFETY_LIMIT)){motor_stop();motor_set_position_mm(config.position_min_mm);direction=0;unload_result=sf==SAFETY_STALL?"stall":"position_min";safety_init(&safety);app_state_dispatch(&machine,EVT_MOVE_DONE);}else set_fault(sf);}
+   safety_fault_t sf=safety_check(&safety,&safety_cfg,false,manual||unload,manual||unload||dosing,now,ds,spi,pos,direction);if(sf){if(unload&&(sf==SAFETY_STALL||sf==SAFETY_LIMIT)){motor_stop();motor_set_position_mm(config.position_min_mm);direction=0;unload_result=sf==SAFETY_STALL?"stall":"position_min";safety_init(&safety);app_state_dispatch(&machine,EVT_MOVE_DONE);}else set_fault(sf);}
   }}
   old=b;motor_moving=machine.state==APP_MANUAL_PUSH||machine.state==APP_MANUAL_PULL||machine.state==APP_DOSING||machine.state==APP_RETRACTING||machine.state==APP_HOMING||machine.state==APP_STOPPING;
   if(machine.state==APP_READY&&statistics_dirty())statistics_persist();if(now-last_status>=STATUS_PERIOD_MS){update_telemetry();last_status=now;}
@@ -139,7 +163,7 @@ static void communication_task(void *arg){
  (void)arg;TickType_t wake=xTaskGetTickCount();
  for(;;){
 #if DISPENSER_HAS_RADIO
-  machine_command_t command;while(radio_ready&&ble_service_take_command(&command))submit_command(&command);while(radio_ready&&wifi_manager_take_command(&command))submit_command(&command);radio_connected=radio_ready&&(wifi_manager_state()==WIFI_CONNECTED||ble_service_connected());
+  machine_command_t command;device_config_t requested_config;while(radio_ready&&ble_service_take_command(&command))submit_command(&command);while(radio_ready&&wifi_manager_take_command(&command))submit_command(&command);while(radio_ready&&wifi_manager_take_config(&requested_config))xQueueOverwrite(config_queue,&requested_config);radio_connected=radio_ready&&(wifi_manager_state()==WIFI_CONNECTED||ble_service_connected());
 #else
   radio_connected=false;
 #endif
@@ -180,7 +204,7 @@ bool app_tasks_format_query(const char *command,char *response,size_t capacity){
  if(!strcasecmp(command,"CONFIG")){snprintf(response,capacity,"CONFIG version=%lu screw_pitch_mm=%.3f motor_steps_per_rev=%u microsteps=%u motor_run_current_mA=%u motor_hold_current_mA=%u manual_speed_mm_s=%.3f dosing_speed_mm_s=%.3f trigger_dose_mm=%.3f a1_mm_s2=%.3f amax_mm_s2=%.3f dmax_mm_s2=%.3f d1_mm_s2=%.3f retract_distance_mm=%.3f retract_speed_mm_s=%.3f retract_delay_ms=%lu position_min_mm=%.3f position_max_mm=%.3f manual_timeout_ms=%lu stallguard_threshold=%d stallguard_warning_level=%u stallguard_critical_level=%u stallguard_filter_count=%u stallguard_enabled=%u\nOK\n",
   (unsigned long)config.version,config.screw_pitch_mm,config.motor_steps_per_rev,config.microsteps,config.motor_run_current_mA,config.motor_hold_current_mA,config.manual_speed_mm_s,config.dosing_speed_mm_s,config.trigger_dose_mm,config.a1_mm_s2,config.amax_mm_s2,config.dmax_mm_s2,config.d1_mm_s2,config.retract_distance_mm,config.retract_speed_mm_s,(unsigned long)config.retract_delay_ms,config.position_min_mm,config.position_max_mm,(unsigned long)config.manual_timeout_ms,config.stallguard_threshold,config.stallguard_warning_level,config.stallguard_critical_level,config.stallguard_filter_count,config.stallguard_enabled);return true;}
  if(!strcasecmp(command,"HELP")){snprintf(response,capacity,
-  "PasteDispenser " DISPENSER_FIRMWARE_VERSION "\nHELP | VERSION | STATUS | CONFIG\nPUSH | PULL | STOP | DOSE <mm> [mm/s] [retract_mm]\nMOVE <mm> [mm/s] | UNLOAD [mm/s] | ZERO | FAULTRESET | RESET\nSET <parameter> <value> | SGCAL START|FINISH|CANCEL | FLUSH\nOK\n");return true;}
+  "PasteDispenser " DISPENSER_FIRMWARE_VERSION "\nHELP | VERSION | STATUS | CONFIG\nPUSH | PULL | STOP | DOSE [mm] [mm/s] [retract_mm]\nMOVE <mm> [mm/s] | UNLOAD [mm/s] | ZERO | FAULTRESET | RESET\nSET <parameter> <value> | SGCAL START|FINISH|CANCEL | FLUSH\nOK\n");return true;}
  return false;
 }
 
@@ -195,7 +219,7 @@ static void usb_command_task(void *arg){
 static void led_task(void *arg){(void)arg;TickType_t wake=xTaskGetTickCount();for(;;){status_led_update(to_ms_since_boot(get_absolute_time()),radio_connected,motor_moving);vTaskDelayUntil(&wake,pdMS_TO_TICKS(25));}}
 
 void app_tasks_start(void){
- buttons_init();config_store_load(&config);statistics_init();
+ buttons_init();provision_at_boot=!gpio_get(PIN_SW_PULL);pull_inhibited_until_release=provision_at_boot;config_store_load(&config);statistics_init();
  motor_cfg=(motor_config_t){.motor_steps_per_rev=config.motor_steps_per_rev,.microsteps=config.microsteps,.motor_run_current_mA=config.motor_run_current_mA,.motor_hold_current_mA=config.motor_hold_current_mA,.screw_pitch_mm=config.screw_pitch_mm,.manual_speed_mm_s=config.manual_speed_mm_s,.a1_mm_s2=config.a1_mm_s2,.amax_mm_s2=config.amax_mm_s2,.dmax_mm_s2=config.dmax_mm_s2,.d1_mm_s2=config.d1_mm_s2};
  app_state_init(&machine);safety_init(&safety);bool motor_ok=motor_init(&motor_cfg);
 #if DISPENSER_HAS_RADIO
@@ -204,7 +228,7 @@ void app_tasks_start(void){
  status_led_init(true);
 #endif
  if(!motor_ok||!motor_configure_stallguard(config.stallguard_enabled,config.stallguard_threshold))set_fault(SAFETY_SPI);else app_state_dispatch(&machine,EVT_INIT_OK);
- command_queue=xQueueCreate(COMMAND_QUEUE_LENGTH,sizeof(machine_command_t));configASSERT(command_queue);telemetry_snapshot=(telemetry_snapshot_t){.state=machine.state,.unload_result="none",.fault=machine.fault_code};
+ command_queue=xQueueCreate(COMMAND_QUEUE_LENGTH,sizeof(machine_command_t));config_queue=xQueueCreate(1,sizeof(device_config_t));configASSERT(command_queue);configASSERT(config_queue);telemetry_snapshot=(telemetry_snapshot_t){.state=machine.state,.unload_result="none",.fault=machine.fault_code};
 #if DISPENSER_HAS_RADIO
  configASSERT(xTaskCreate(radio_init_task,"radio",2048,NULL,7,NULL)==pdPASS);
 #endif

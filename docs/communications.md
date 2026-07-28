@@ -9,8 +9,8 @@ les accélérations en mm/s² et les courants en mA.
 | Liaison | Disponibilité | Format | Usage principal |
 |---|---|---|---|
 | USB série | Pico 2 et Pico 2 W | commandes ASCII ou JSON, une ligne par ordre | mise au point, configuration locale et maintenance |
-| BLE | Pico 2 W | JSON UTF-8 dans des caractéristiques GATT | application mobile, navigateur ou outil Python proche de la machine |
-| Wi-Fi | Pico 2 W après provisionnement BLE | JSON par WebSocket ou HTTP | supervision et commande sur le réseau local |
+| BLE | Pico 2 W | commandes ASCII sur Nordic UART Service (NUS) | commande simple depuis mobile ou outil Python proche de la machine |
+| Wi-Fi | Pico 2 W après provisionnement BLE | formulaire HTTP et API JSON | configuration persistante ; commandes réservées aux tests |
 
 Les trois interfaces alimentent la même file FreeRTOS. Les mêmes règles de sécurité
 s’appliquent : un mouvement n’est accepté que dans `READY`, `STOP` est prioritaire et un
@@ -37,7 +37,7 @@ puis `OK`.
 
 Envoi : `VERSION`
 
-Retour : la version courante, par exemple `PasteDispenser 1.4.1`, puis `OK`.
+Retour : la version courante, par exemple `PasteDispenser 1.5.0`, puis `OK`.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -91,7 +91,8 @@ SET d1_mm_s2 60
 RESET
 ```
 
-En BLE, HTTP API ou WebSocket, utiliser successivement :
+En BLE NUS, utiliser les mêmes commandes ASCII que sur l'USB. Avec l'API HTTP avancée
+ou le WebSocket, utiliser successivement :
 
 ```json
 {"command":"set_config","parameter":"a1_mm_s2","value":80}
@@ -101,8 +102,8 @@ En BLE, HTTP API ou WebSocket, utiliser successivement :
 {"command":"reboot"}
 ```
 
-Ces réglages sont volontairement absents de l’interface graphique HTTP : ils restent
-accessibles par l’API HTTP avancée, le WebSocket, le BLE et l’USB série.
+Ces quatre réglages avancés ne sont volontairement pas affichés dans le formulaire HTTP.
+Ils restent accessibles par l'API HTTP avancée, le WebSocket, le BLE NUS et l'USB série.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -132,10 +133,11 @@ Arrêt prioritaire. La file de commandes en attente est vidée avant l’inserti
 
 ### `DOSE`
 
-Envoi : `DOSE <distance_mm> [vitesse_mm_s] [recul_mm]`
+Envoi : `DOSE [distance_mm] [vitesse_mm_s] [recul_mm]`
 
-Exemple : `DOSE 0.8 4 0.1`. La vitesse omise utilise `dosing_speed_mm_s`. Le recul omis
-utilise `retract_distance_mm`.
+`DOSE` sans argument utilise `trigger_dose_mm`, `dosing_speed_mm_s` et
+`retract_distance_mm`, exactement comme une fermeture du contact GP13. Exemple explicite :
+`DOSE 0.8 4 0.1`. Une fourniture dépassant la course restante est refusée avant le mouvement.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -240,10 +242,9 @@ Commande de provisionnement :
 WIFI:mon_reseau;PASSWORD:mon_mot_de_passe
 ```
 
-Réponses possibles sur TX : `OK WIFI CONNECTING`, `ERR FORMAT`, `ERR TOO_LONG`,
+Réponses possibles sur TX : `OK WIFI CONNECTING`, `OK QUEUED`, `ERR FORMAT`, `ERR TOO_LONG`,
 `ERR WIFI_REQUEST` ou `ERR PROVISIONING_CLOSED`. Activer les notifications TX avant
-l’écriture RX. Une commande tenant dans une seule écriture ne nécessite pas de terminaison ;
-si l’application la fragmente, ajouter `\n` à la fin. La limite est de 111 octets, avec un
+l’écriture RX et terminer chaque commande ASCII par `\n`. La limite est de 111 octets, avec un
 SSID de 1 à 32 octets et un mot de passe de 0 à 64 octets.
 
 La fenêtre de provisionnement doit être ouverte au premier démarrage ou en maintenant PULL
@@ -254,7 +255,9 @@ Les ordres ASCII de mouvement acceptés sur RX sont les mêmes que sur l’USB s
 `BOOTSEL` est volontairement réservé à l'USB local.
 Les commandes de lecture `HELP`, `VERSION`, `STATUS` et `CONFIG` sont également acceptées.
 Les réponses longues sont découpées en plusieurs notifications TX selon le MTU négocié ; le client
-doit les concaténer jusqu'à la ligne finale `OK`. Les erreurs sont `ERR COMMAND` ou `ERR BUSY`.
+doit les concaténer jusqu'à la ligne finale `OK`. `OK QUEUED` confirme la mise en file d'un
+ordre moteur ; son exécution et sa fin se vérifient avec `STATUS`. Les erreurs sont
+`ERR COMMAND` ou `ERR BUSY`.
 La connexion BLE est automatiquement rompue après 60 secondes sans écriture RX ni notification TX.
 Chaque échange NUS remet entièrement cette temporisation d'inactivité à zéro.
 
@@ -262,11 +265,18 @@ Chaque échange NUS remet entièrement cette temporisation d'inactivité à zér
 
 ## 3. Wi-Fi
 
-Le Wi-Fi doit d’abord être configuré par BLE. Après connexion, la Pico expose :
+Le Wi-Fi doit d’abord être configuré par BLE. Les identifiants validés sont persistants et la
+reconnexion est automatique aux démarrages suivants. Après connexion, la Pico expose :
 
 - `ws://<adresse-ip>/ws` pour les commandes et la télémétrie temps réel ;
 - `GET http://<adresse-ip>/api/status` pour lire l’état ;
+- `GET http://<adresse-ip>/api/config` pour lire tous les paramètres persistants ;
+- `POST http://<adresse-ip>/api/config` pour valider et enregistrer tous les paramètres ;
 - `POST http://<adresse-ip>/api/command` pour envoyer une commande JSON.
+
+La page principale est dédiée à la configuration des valeurs par défaut : géométrie,
+courants, vitesses, quantité fournie par le contact ou `DOSE`, recul, course et StallGuard.
+Les commandes moteur Wi-Fi restent présentes pour les tests et la maintenance.
 
 La carte annonce aussi le nom mDNS `dispenser.local` et le service DNS-SD
 `PasteDispenser._http._tcp` sur le port 80. Il est donc possible d’utiliser
@@ -281,6 +291,17 @@ L’exemple `example/nus_serial_example.py` montre l’échange de commandes ASC
 ### État Wi-Fi : `GET /api/status`
 
 Exemple : `curl http://192.168.1.42/api/status`. Retour : télémétrie JSON courante.
+
+<div style="break-after: page; page-break-after: always;"></div>
+
+### Configuration Wi-Fi : `GET /api/config` et `POST /api/config`
+
+`GET /api/config` retourne les paramètres configurables sans les identifiants Wi-Fi.
+Le formulaire de la page principale modifie ces valeurs puis les transmet ensemble à
+`POST /api/config`. Le firmware valide l'objet complet, le met en file et ne l'enregistre
+en flash que lorsque la machine est dans l'état `READY`. Une réponse
+`{"ok":true,"queued":true}` confirme la mise en file. Redémarrer ensuite la seringue pour
+appliquer les paramètres du pilote moteur.
 
 <div style="break-after: page; page-break-after: always;"></div>
 
@@ -401,6 +422,6 @@ WebSocket ou corps POST : `{"command":"sg_calibrate_cancel"}`.
 
 `load` : `0` normal, `1` élevé, `2` avertissement, `3` blocage critique.
 
-Les réponses HTTP à `POST /api/command` sont `{"ok":true}` si la commande a été comprise
-et mise en file, sinon `{"ok":false}`. Une mise en file confirme la réception, pas la fin
-du mouvement : la fin doit toujours être confirmée par la télémétrie.
+Les réponses HTTP à `POST /api/command` sont `{"ok":true,"queued":true}` si la commande
+a été comprise et mise en file, sinon `{"ok":false,"queued":false}`. Une mise en file
+confirme la réception, pas l'application effective ni la fin du mouvement.

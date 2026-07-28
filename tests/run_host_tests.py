@@ -11,6 +11,7 @@ SOURCES = [
     "src/app_state.c",
     "src/motor_control.c",
     "src/command_api.c",
+    "src/device_config.c",
     "src/safety.c",
     "src/stallguard_calibration.c",
     "src/ws_crypto.c",
